@@ -4,12 +4,19 @@ import {
   type Id,
   type Inbox,
   type Item,
+  type ItemChanges,
   type Project,
   type Status,
 } from "@organify/core";
 import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { Board } from "./board";
+import { CalendarView } from "./calendar-view";
+import {
+  localStamp,
+  repeatOptions,
+  scheduleChanges,
+} from "./calendar-schedule";
 import { parseCapture } from "./quick-capture";
 import { ProjectSelect, StatusSelect } from "./task-controls";
 
@@ -39,13 +46,21 @@ function TaskDetail({
 }: {
   item: Item;
   projects: Project[];
-  save: (title: string, notes: string, projectId: string) => Promise<boolean>;
+  save: (changes: ItemChanges) => Promise<boolean>;
   remove: () => void;
   close: () => void;
 }) {
   const [title, setTitle] = useState(item.title);
   const [notes, setNotes] = useState(item.notes);
   const [projectId, setProjectId] = useState(item.projectId ?? "");
+  const scheduled = item.start ?? item.due;
+  const local = scheduled ? localStamp(new Date(scheduled)) : "";
+  const [date, setDate] = useState<string | undefined>();
+  const [time, setTime] = useState<string | undefined>();
+  const [recurrence, setRecurrence] = useState<string | undefined>();
+  const selectedDate = date ?? local.slice(0, 10);
+  const selectedTime = time ?? (item.allDay ? "" : local.slice(11, 16));
+  const selectedRecurrence = recurrence ?? item.recurrence ?? "";
   const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +68,26 @@ function TaskDetail({
     if (saving) return;
     setSaving(true);
     try {
-      await save(title, notes, projectId);
+      const scheduleEdited =
+        date !== undefined || time !== undefined || recurrence !== undefined;
+      const start = selectedDate
+        ? new Date(selectedDate + "T" + (selectedTime || "00:00"))
+        : undefined;
+      const schedule = scheduleEdited
+        ? scheduleChanges(item, start, !selectedTime, selectedRecurrence)
+        : {};
+      if (
+        await save({
+          title,
+          notes,
+          projectId: projectId || undefined,
+          ...schedule,
+        })
+      ) {
+        setDate(undefined);
+        setTime(undefined);
+        setRecurrence(undefined);
+      }
     } finally {
       setSaving(false);
     }
@@ -100,8 +134,44 @@ function TaskDetail({
             onChange={(event) => setNotes(event.target.value)}
           />
         </label>
-        {dateLabel(item) && (
-          <p className="text-sm text-muted">{dateLabel(item)}</p>
+        <label className="grid gap-1 text-sm">
+          Fecha
+          <input
+            type="date"
+            className="field min-w-0"
+            value={selectedDate}
+            onChange={(event) => setDate(event.target.value)}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          Hora (opcional)
+          <input
+            type="time"
+            className="field min-w-0"
+            value={selectedDate ? selectedTime : ""}
+            disabled={!selectedDate}
+            onChange={(event) => setTime(event.target.value)}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          Repetición
+          <select
+            className="field min-w-0"
+            disabled={!selectedDate}
+            value={selectedDate ? selectedRecurrence : ""}
+            onChange={(event) => setRecurrence(event.target.value)}
+          >
+            {repeatOptions.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedDate && selectedRecurrence && (
+          <p className="text-sm text-muted">
+            Los cambios se aplican a toda la serie.
+          </p>
         )}
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" disabled={saving}>
@@ -128,7 +198,7 @@ export function App() {
   const [error, setError] = useState("");
   const [inbox, setInbox] = useState<Inbox>("all");
   const [projectId, setProjectId] = useState<Id>();
-  const [view, setView] = useState<"list" | "board">("list");
+  const [view, setView] = useState<"list" | "board" | "calendar">("list");
   const [selectedId, setSelectedId] = useState<Id>();
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -162,6 +232,7 @@ export function App() {
   }, []);
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
+    if (view === "calendar" && nextInbox !== "all") setView("list");
     setInbox(nextInbox);
     setProjectId(nextProject);
     setSelectedId(undefined);
@@ -235,11 +306,13 @@ export function App() {
   );
   const heading = projectId
     ? projectById.get(projectId)
-    : inboxes.find(({ id }) => id === inbox)?.label;
+    : inboxes.find(({ id }) => id === (view === "calendar" ? "all" : inbox))
+        ?.label;
   const commands = [
     { label: "Capturar tarea", run: () => capture.current?.focus() },
     { label: "Abrir lista", run: () => setView("list") },
     { label: "Abrir tablero", run: () => setView("board") },
+    { label: "Abrir calendario", run: () => setView("calendar") },
     ...inboxes.map(({ id, label }) => ({
       label: `Ir a ${label}`,
       run: () => navigate(id),
@@ -267,7 +340,11 @@ export function App() {
               <button
                 type="button"
                 key={id}
-                aria-current={!projectId && inbox === id ? "page" : undefined}
+                aria-current={
+                  !projectId && (view === "calendar" ? "all" : inbox) === id
+                    ? "page"
+                    : undefined
+                }
                 className="nav-link w-full min-w-0"
                 onClick={() => navigate(id)}
               >
@@ -366,6 +443,14 @@ export function App() {
             >
               Tablero
             </button>
+            <button
+              type="button"
+              className="nav-link"
+              aria-pressed={view === "calendar"}
+              onClick={() => setView("calendar")}
+            >
+              Calendario
+            </button>
           </div>
 
           <p role="status" className="text-sm text-muted empty:hidden">
@@ -387,6 +472,20 @@ export function App() {
 
           <div className="grid items-start gap-4 xl:flex">
             <div className="min-w-0 flex-1">
+              {snapshot && view === "calendar" && (
+                <CalendarView
+                  items={snapshot.items.filter(
+                    (item) => !projectId || item.projectId === projectId,
+                  )}
+                  open={setSelectedId}
+                  reschedule={(id, changes) =>
+                    write(
+                      () => repositories.items.update(id, changes),
+                      "Tarea reprogramada.",
+                    )
+                  }
+                />
+              )}
               {snapshot && view === "board" && (
                 <Board items={visible} open={setSelectedId} move={move} />
               )}
@@ -435,14 +534,9 @@ export function App() {
                 key={selected.id}
                 item={selected}
                 projects={projects}
-                save={(title, notes, id) =>
+                save={(changes) =>
                   write(
-                    () =>
-                      repositories.items.update(selected.id, {
-                        title,
-                        notes,
-                        projectId: id || undefined,
-                      }),
+                    () => repositories.items.update(selected.id, changes),
                     "Tarea guardada.",
                   )
                 }

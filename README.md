@@ -35,6 +35,20 @@ en `@organify/storage`. Los repositorios usan UUIDv7 de `uuid`, claves de
 orden de `fractional-indexing` y borrado lógico. El tablero añade la tarjeta
 al final de la columna de destino.
 
+## Fase 2 · Calendario
+
+Abre **Calendario** desde las vistas o la paleta de comandos. Cambia entre
+mes, semana y agenda. Selecciona un proyecto para ver sus tareas.
+
+En el detalle, elige una fecha y, si quieres, una hora. Puedes repetir la
+tarea a diario, semanalmente o cada mes. Arrastra una tarea en la vista
+de mes o semana para reprogramarla. Arrastrar una ocurrencia mueve toda
+la serie, que comparte el título, las notas y el estado de la tarea.
+
+Para comprobar el flujo, programa una tarea semanal, arrastra una
+ocurrencia y recarga. Revisa que el nuevo horario se conserve en el
+detalle y que la serie aparezca en la siguiente semana.
+
 ## Comprobaciones
 
 ```powershell

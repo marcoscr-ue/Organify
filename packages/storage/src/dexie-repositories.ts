@@ -116,6 +116,10 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
             );
           }
           if (changes.notes !== undefined) item.notes = changes.notes;
+          if ("start" in changes) item.start = changes.start;
+          if ("due" in changes) item.due = changes.due;
+          if ("allDay" in changes) item.allDay = changes.allDay;
+          if ("recurrence" in changes) item.recurrence = changes.recurrence;
           await db.items.put(item);
         });
       },
