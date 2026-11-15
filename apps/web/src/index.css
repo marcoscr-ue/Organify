@@ -34,3 +34,8 @@ body {
 .nav-link {
   @apply rounded-md px-3 py-2 text-left text-sm break-words hover:bg-panel focus-visible:outline-2 focus-visible:outline-primary aria-current:bg-tint aria-pressed:bg-tint;
 }
+
+.organify-calendar .fc-header-toolbar {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

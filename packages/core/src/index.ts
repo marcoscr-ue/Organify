@@ -9,6 +9,7 @@ export interface Item {
   status: Status;
   start?: string;
   due?: string;
+  recurrence?: string;
   allDay?: boolean;
   projectId?: Id;
   order: string;
@@ -28,7 +29,12 @@ export interface Project {
 }
 
 export type NewItem = Pick<Item, "title" | "projectId" | "start" | "allDay">;
-export type ItemChanges = Partial<Pick<Item, "title" | "notes" | "projectId">>;
+export type ItemChanges = Partial<
+  Pick<
+    Item,
+    "title" | "notes" | "projectId" | "start" | "due" | "allDay" | "recurrence"
+  >
+>;
 
 export type Inbox = "all" | "today" | "upcoming" | "undated";
 
