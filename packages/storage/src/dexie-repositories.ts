@@ -1,13 +1,17 @@
 import Dexie, { liveQuery, type Table } from "dexie";
 import { generateKeyBetween } from "fractional-indexing";
 import { v7 } from "uuid";
-import type { Id, Item, Project } from "@organify/core";
+import type { Id, Item, Project, Op, Replica } from "@organify/core";
+import { tickHlc } from "@organify/core";
+import { materialize, mergeReplica, record } from "./journal";
 import type { TaskRepositories } from "./index";
 
 class OrganifyDatabase extends Dexie {
   declare items: Table<Item, Id>;
   declare projects: Table<Project, Id>;
-  declare settings: Table<{ key: "workspace"; value: Id }, "workspace">;
+  declare settings: Table<{ key: string; value: Id }, string>;
+  declare replicas: Table<{ key: string; state: Replica }, string>;
+  declare outbox: Table<Op, string>;
 
   constructor(name: string) {
     super(name);
@@ -16,6 +20,25 @@ class OrganifyDatabase extends Dexie {
       projects: "id, order",
       settings: "key",
     });
+    this.version(2)
+      .stores({ replicas: "key", outbox: "id" })
+      .upgrade(async (tx) => {
+        const tables = {
+          items: tx.table<Item, Id>("items"),
+          projects: tx.table<Project, Id>("projects"),
+          settings: tx.table<{ key: string; value: string }, string>(
+            "settings",
+          ),
+          replicas: tx.table<{ key: string; state: Replica }, string>(
+            "replicas",
+          ),
+          outbox: tx.table<Op, string>("outbox"),
+        };
+        for (const project of await tables.projects.toArray())
+          await record(tables, "project", project);
+        for (const item of await tables.items.toArray())
+          await record(tables, "item", item);
+      });
   }
 }
 
@@ -29,6 +52,8 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
   const db = new OrganifyDatabase(name);
 
   async function workspaceId(): Promise<Id> {
+    const account = await db.settings.get("account");
+    if (account) return account.value;
     const existing = await db.settings.get("workspace");
     if (existing) return existing.value;
     const value = v7();
@@ -59,7 +84,42 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     return generateKeyBetween(last?.order ?? null, null);
   }
 
+  const writeTables = [
+    db.items,
+    db.projects,
+    db.settings,
+    db.replicas,
+    db.outbox,
+  ];
   return {
+    sync: {
+      bind(userId) {
+        return db.transaction("rw", db.settings, async () => {
+          const account = await db.settings.get("account");
+          if (account && account.value !== userId)
+            throw new Error("Esta base local pertenece a otra cuenta.");
+          await db.settings.put({ key: "account", value: userId });
+        });
+      },
+      pending: (limit) => db.outbox.limit(limit).toArray(),
+      acknowledge: (ids) => db.outbox.bulkDelete(ids),
+      async cursor() {
+        return (await db.settings.get("cursor"))?.value ?? "0";
+      },
+      apply(ops, cursor) {
+        return db.transaction("rw", writeTables, async () => {
+          const previous = (await db.settings.get("cursor"))?.value ?? "0";
+          if (BigInt(cursor) <= BigInt(previous)) return;
+          let clock = (await db.settings.get("clock"))?.value;
+          for (const op of ops) {
+            clock = tickHlc(Date.now(), clock, op.hlc);
+            await materialize(db, op, await mergeReplica(db, op));
+          }
+          if (clock) await db.settings.put({ key: "clock", value: clock });
+          await db.settings.put({ key: "cursor", value: cursor });
+        });
+      },
+    },
     subscribe(next, error) {
       const subscription = liveQuery(() =>
         db.transaction("r", db.items, db.projects, async () => ({
@@ -79,32 +139,29 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           input.title,
           "Escribe un título para la tarea.",
         );
-        return db.transaction(
-          "rw",
-          db.items,
-          db.projects,
-          db.settings,
-          async () => {
-            await checkProject(input.projectId);
-            const id = v7();
-            await db.items.add({
-              ...input,
-              id,
-              workspaceId: await workspaceId(),
-              title,
-              status: "todo",
-              order: await nextOrder("todo"),
-              tagIds: [],
-              props: {},
-              notes: "",
-            });
-            return id;
-          },
-        );
+        return db.transaction("rw", writeTables, async () => {
+          await checkProject(input.projectId);
+          const id = v7();
+          const item: Item = {
+            ...input,
+            id,
+            workspaceId: await workspaceId(),
+            title,
+            status: "todo",
+            order: await nextOrder("todo"),
+            tagIds: [],
+            props: {},
+            notes: "",
+          };
+          await db.items.add(item);
+          await record(db, "item", item);
+          return id;
+        });
       },
       update(id, changes) {
-        return db.transaction("rw", db.items, db.projects, async () => {
-          const item = await getItem(id);
+        return db.transaction("rw", writeTables, async () => {
+          const previous = await getItem(id);
+          const item = { ...previous };
           if ("projectId" in changes) {
             await checkProject(changes.projectId);
             item.projectId = changes.projectId;
@@ -121,20 +178,25 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           if ("allDay" in changes) item.allDay = changes.allDay;
           if ("recurrence" in changes) item.recurrence = changes.recurrence;
           await db.items.put(item);
+          await record(db, "item", item, previous);
         });
       },
       move(id, status) {
-        return db.transaction("rw", db.items, async () => {
+        return db.transaction("rw", writeTables, async () => {
           const item = await getItem(id);
           if (item.status === status) return;
-          await db.items.update(id, { status, order: await nextOrder(status) });
+          const next = { ...item, status, order: await nextOrder(status) };
+          await db.items.put(next);
+          await record(db, "item", next, item);
         });
       },
       remove(id) {
-        return db.transaction("rw", db.items, async () => {
+        return db.transaction("rw", writeTables, async () => {
           const task = await db.items.get(id);
           if (task && !task.deletedAt) {
-            await db.items.update(id, { deletedAt: new Date().toISOString() });
+            const next = { ...task, deletedAt: new Date().toISOString() };
+            await db.items.put(next);
+            await record(db, "item", next, task);
           }
         });
       },
@@ -142,15 +204,17 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     projects: {
       create(input) {
         const name = requiredText(input, "Escribe un nombre para el proyecto.");
-        return db.transaction("rw", db.projects, db.settings, async () => {
+        return db.transaction("rw", writeTables, async () => {
           const last = await db.projects.orderBy("order").last();
           const id = v7();
-          await db.projects.add({
+          const project: Project = {
             id,
             workspaceId: await workspaceId(),
             name,
             order: generateKeyBetween(last?.order ?? null, null),
-          });
+          };
+          await db.projects.add(project);
+          await record(db, "project", project);
           return id;
         });
       },

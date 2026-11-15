@@ -11,6 +11,7 @@ import {
 import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { Board } from "./board";
+import { SyncSettings } from "./sync-settings";
 import { CalendarView } from "./calendar-view";
 import {
   localStamp,
@@ -391,6 +392,7 @@ export function App() {
               </Button>
             </form>
           </div>
+          <SyncSettings store={repositories.sync} />
         </aside>
 
         <main className="min-w-0 p-4 sm:p-6 lg:p-8">
