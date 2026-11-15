@@ -1,0 +1,137 @@
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
+
+declare global {
+  interface Window {
+    __TAURI__?: { core: { invoke: (command: string) => Promise<unknown> } };
+  }
+}
+
+export const isAndroid = Capacitor.getPlatform() === "android";
+const storageKey = "organify.local-reminders.v1";
+const title = "Organify";
+const body = "Tienes una tarea pendiente.";
+
+interface Reminder {
+  at: number;
+  nativeId?: number;
+}
+
+function readReminders(): Record<string, Reminder> {
+  return JSON.parse(localStorage.getItem(storageKey) ?? "{}") as Record<
+    string,
+    Reminder
+  >;
+}
+
+function writeReminder(taskId: string, value?: Reminder) {
+  const reminders = readReminders();
+  if (value) reminders[taskId] = value;
+  else delete reminders[taskId];
+  localStorage.setItem(storageKey, JSON.stringify(reminders));
+}
+
+export function reminderTime(taskId: string) {
+  const at = readReminders()[taskId]?.at;
+  return at && at > Date.now() ? at : undefined;
+}
+
+export async function scheduleReminder(taskId: string, at: number) {
+  if (!Number.isFinite(at) || at <= Date.now()) {
+    throw new Error("Elige una fecha y hora futuras.");
+  }
+
+  if (isAndroid) {
+    let { display } = await LocalNotifications.checkPermissions();
+    if (display !== "granted") {
+      ({ display } = await LocalNotifications.requestPermissions());
+    }
+    if (display !== "granted")
+      throw new Error("Permite las notificaciones en Android.");
+    const existing = readReminders()[taskId]?.nativeId;
+    const used = new Set(
+      Object.values(readReminders()).map((entry) => entry.nativeId),
+    );
+    let id = existing ?? 1;
+    if (!existing) {
+      while (used.has(id)) id++;
+    }
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id,
+          title,
+          body,
+          schedule: { at: new Date(at) },
+          isExactNotification: false,
+        },
+      ],
+    });
+    writeReminder(taskId, { at, nativeId: id });
+    return;
+  }
+
+  if (!window.__TAURI__) {
+    if (!("Notification" in window))
+      throw new Error("Este navegador no admite avisos locales.");
+    if ((await Notification.requestPermission()) !== "granted") {
+      throw new Error("Permite las notificaciones en el navegador.");
+    }
+  }
+  writeReminder(taskId, { at });
+}
+
+export async function cancelReminder(taskId: string) {
+  const id = readReminders()[taskId]?.nativeId;
+  if (isAndroid && id !== undefined) {
+    await LocalNotifications.cancel({ notifications: [{ id }] });
+  }
+  writeReminder(taskId);
+}
+
+async function deliverDueReminders() {
+  for (const [taskId, reminder] of Object.entries(readReminders())) {
+    if (reminder.at > Date.now()) continue;
+    if (window.__TAURI__) {
+      await window.__TAURI__.core.invoke("show_reminder");
+    } else {
+      if (!("Notification" in window) || Notification.permission !== "granted")
+        return;
+      const registration = await navigator.serviceWorker?.getRegistration();
+      if (registration?.active) {
+        await registration.showNotification(title, { body, tag: taskId });
+      } else {
+        new Notification(title, { body, tag: taskId });
+      }
+    }
+    if (readReminders()[taskId]?.at === reminder.at) writeReminder(taskId);
+  }
+}
+
+export function watchReminders() {
+  if (isAndroid) return;
+  let running = false;
+  function tick() {
+    if (running) return;
+    running = true;
+    const run = () => deliverDueReminders();
+    const delivery = navigator.locks
+      ? navigator.locks.request("organify-reminders", run)
+      : run();
+    void delivery
+      .catch((error: unknown) =>
+        console.error("No se pudo mostrar el recordatorio.", error),
+      )
+      .finally(() => {
+        running = false;
+      });
+  }
+
+  tick();
+  const timer = window.setInterval(tick, 5_000);
+  window.addEventListener("focus", tick);
+  return () => {
+    window.clearInterval(timer);
+    window.removeEventListener("focus", tick);
+  };
+}

@@ -12,6 +12,8 @@ import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { Board } from "./board";
 import { SyncSettings } from "./sync-settings";
+import { ReminderForm } from "./reminder-form";
+import { cancelReminder, watchReminders } from "./reminders";
 import { CalendarView } from "./calendar-view";
 import {
   localStamp,
@@ -188,6 +190,7 @@ function TaskDetail({
           </button>
         </div>
       </form>
+      <ReminderForm taskId={item.id} />
     </aside>
   );
 }
@@ -213,6 +216,8 @@ export function App() {
     () => repositories.subscribe(setSnapshot, () => setReadError(true)),
     [],
   );
+
+  useEffect(watchReminders, []);
 
   function openPalette() {
     if (!palette.current?.open) {
@@ -544,10 +549,10 @@ export function App() {
                 }
                 remove={() => {
                   if (!window.confirm(`¿Eliminar «${selected.title}»?`)) return;
-                  void write(
-                    () => repositories.items.remove(selected.id),
-                    "Tarea eliminada.",
-                  ).then((removed) => {
+                  void write(async () => {
+                    await cancelReminder(selected.id);
+                    await repositories.items.remove(selected.id);
+                  }, "Tarea eliminada.").then((removed) => {
                     if (removed)
                       setSelectedId((id) =>
                         id === selected.id ? undefined : id,

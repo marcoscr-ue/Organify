@@ -1,0 +1,12 @@
+{
+  "name": "@organify/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
