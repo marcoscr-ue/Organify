@@ -53,3 +53,4 @@ export function matchesInbox(item: Item, inbox: Inbox, now: Date): boolean {
     ? time >= today.getTime() && time < tomorrow.getTime()
     : time >= tomorrow.getTime();
 }
+export * from "./operations";

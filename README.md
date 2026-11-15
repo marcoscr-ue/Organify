@@ -49,6 +49,31 @@ Para comprobar el flujo, programa una tarea semanal, arrastra una
 ocurrencia y recarga. Revisa que el nuevo horario se conserve en el
 detalle y que la serie aparezca en la siguiente semana.
 
+## Fase 3 · Sincronización cifrada
+
+Aplica la migración de `supabase/migrations` en un proyecto de Supabase de
+pruebas y crea un usuario de correo y contraseña en Authentication. Define
+`VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` en `apps/web/.env.local`
+y reinicia Vite. Usa la clave pública del proyecto.
+
+En **Sincronización**, conecta el primer dispositivo con una frase de
+cifrado distinta de la contraseña de acceso. Marca **Configurar el primer
+dispositivo** y copia la clave de recuperación. En un segundo perfil de
+navegador, conecta con la misma cuenta y desbloquea con la frase de cifrado
+o la clave de recuperación. Tras recargar, vuelve a desbloquear para activar
+la sincronización de nuevo.
+
+Para comprobar la convergencia, desconecta temporalmente la red, edita el
+título en un perfil y las notas en el otro, y vuelve a conectar ambos.
+Comprueba los dos cambios desde un tercer perfil vacío. La base local queda
+vinculada a la primera cuenta que se conecta. Usa otro perfil de navegador
+para otra cuenta. Las tareas siguen disponibles localmente al desconectar.
+
+La sincronización cifra el contenido que sale del dispositivo. IndexedDB
+conserva las tareas legibles en el dispositivo. Las notas simples se fusionan
+como un campo y la edición colaborativa de texto con Yjs corresponde a la
+Fase 5.
+
 ## Comprobaciones
 
 ```powershell
