@@ -8,10 +8,16 @@ import {
   type Project,
   type Status,
 } from "@organify/core";
-import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
+import {
+  createTaskRepositories,
+  type SavedView,
+  type TaskSnapshot,
+} from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { Board } from "./board";
-import { SyncSettings } from "./sync-settings";
+import { AppControls, ReleaseNotes } from "./app-overlays";
+import { BlockNotes } from "./block-notes";
+import { TaskProperties } from "./task-properties";
 import { ReminderForm } from "./reminder-form";
 import { cancelReminder, watchReminders } from "./reminders";
 import { CalendarView } from "./calendar-view";
@@ -44,17 +50,21 @@ function TaskDetail({
   item,
   projects,
   save,
+  saveProperty,
   remove,
   close,
 }: {
   item: Item;
   projects: Project[];
+  saveProperty: (
+    name: string,
+    value: string | number | boolean | null,
+  ) => Promise<boolean>;
   save: (changes: ItemChanges) => Promise<boolean>;
   remove: () => void;
   close: () => void;
 }) {
   const [title, setTitle] = useState(item.title);
-  const [notes, setNotes] = useState(item.notes);
   const [projectId, setProjectId] = useState(item.projectId ?? "");
   const scheduled = item.start ?? item.due;
   const local = scheduled ? localStamp(new Date(scheduled)) : "";
@@ -82,7 +92,6 @@ function TaskDetail({
       if (
         await save({
           title,
-          notes,
           projectId: projectId || undefined,
           ...schedule,
         })
@@ -127,14 +136,6 @@ function TaskDetail({
             value={projectId}
             onChange={setProjectId}
             projects={projects}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Notas
-          <textarea
-            className="field min-h-28"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
           />
         </label>
         <label className="grid gap-1 text-sm">
@@ -190,6 +191,12 @@ function TaskDetail({
           </button>
         </div>
       </form>
+      <BlockNotes
+        id={item.id}
+        legacy={item.notes}
+        documents={repositories.documents}
+      />
+      <TaskProperties values={item.props} save={saveProperty} />
       <ReminderForm taskId={item.id} />
     </aside>
   );
@@ -208,6 +215,10 @@ export function App() {
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<Status>();
+  const [viewName, setViewName] = useState("");
   const [query, setQuery] = useState("");
   const capture = useRef<HTMLInputElement>(null);
   const palette = useRef<HTMLDialogElement>(null);
@@ -218,9 +229,42 @@ export function App() {
   );
 
   useEffect(watchReminders, []);
+  useEffect(
+    () =>
+      repositories.views.subscribe(setSavedViews, () =>
+        setError("No se pudieron leer las vistas guardadas."),
+      ),
+    [],
+  );
+
+  function openSavedView(saved: SavedView) {
+    navigate(saved.inbox, saved.projectId);
+    setTaskSearch(saved.search);
+    setStatusFilter(saved.status);
+    setView(saved.layout);
+  }
+
+  async function saveCurrentView(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      await write(
+        () =>
+          repositories.views.save({
+            name: viewName,
+            search: taskSearch,
+            inbox: view === "calendar" ? "all" : inbox,
+            projectId,
+            status: statusFilter,
+            layout: view,
+          }),
+        "Vista guardada.",
+      )
+    )
+      setViewName("");
+  }
 
   function openPalette() {
-    if (!palette.current?.open) {
+    if (!document.querySelector("dialog[open]")) {
       setQuery("");
       palette.current?.showModal();
     }
@@ -240,6 +284,8 @@ export function App() {
   function navigate(nextInbox: Inbox, nextProject?: Id) {
     if (view === "calendar" && nextInbox !== "all") setView("list");
     setInbox(nextInbox);
+    setTaskSearch("");
+    setStatusFilter(undefined);
     setProjectId(nextProject);
     setSelectedId(undefined);
   }
@@ -305,7 +351,11 @@ export function App() {
     snapshot?.items.filter(
       (item) =>
         (!projectId || item.projectId === projectId) &&
-        matchesInbox(item, inbox, now),
+        (!statusFilter || item.status === statusFilter) &&
+        item.title
+          .toLocaleLowerCase("es")
+          .includes(taskSearch.trim().toLocaleLowerCase("es")) &&
+        matchesInbox(item, view === "calendar" ? "all" : inbox, now),
     ) ?? [];
   const projectById = new Map(
     projects.map((project) => [project.id, project.name]),
@@ -323,6 +373,10 @@ export function App() {
       label: `Ir a ${label}`,
       run: () => navigate(id),
     })),
+    ...savedViews.map((saved) => ({
+      label: `Abrir vista ${saved.name}`,
+      run: () => openSavedView(saved),
+    })),
     ...projects.map(({ id, name }) => ({
       label: `Abrir proyecto ${name}`,
       run: () => navigate("all", id),
@@ -335,8 +389,23 @@ export function App() {
 
   return (
     <div className="min-h-svh">
-      <div className="grid min-h-svh w-full md:grid-cols-[14rem_minmax(0,1fr)]">
-        <aside className="grid min-w-0 content-start gap-5 border-b border-line bg-paper p-4 md:border-r md:border-b-0 md:p-4">
+      <div className="grid min-h-svh w-full grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-[auto_1fr]">
+        <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 pt-4 pb-5 sm:px-6 sm:pt-6 md:col-start-2 md:row-start-1 lg:px-8 lg:pt-8">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {heading ?? "Tareas"}
+          </h1>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openPalette}
+              className="rounded-lg border border-line bg-paper px-3 py-2 text-sm"
+            >
+              Comandos <kbd className="ml-2 text-muted">Ctrl+K</kbd>
+            </button>
+            <AppControls store={repositories.sync} />
+          </div>
+        </header>
+        <aside className="flex min-w-0 flex-col gap-5 border-b border-line bg-paper p-4 md:sticky md:top-0 md:col-start-1 md:row-span-2 md:row-start-1 md:h-svh md:overflow-y-auto md:border-r md:border-b-0">
           <p className="text-lg font-semibold tracking-tight">Organify</p>
           <nav
             aria-label="Vistas"
@@ -397,23 +466,39 @@ export function App() {
               </Button>
             </form>
           </div>
-          <SyncSettings store={repositories.sync} />
+          <nav aria-label="Vistas guardadas" className="grid min-w-0 gap-1">
+            <h2 className="text-sm font-semibold">Vistas guardadas</h2>
+            {savedViews.map((saved) => (
+              <div className="flex min-w-0 items-center gap-1" key={saved.id}>
+                <button
+                  type="button"
+                  className="nav-link min-w-0 flex-1"
+                  onClick={() => openSavedView(saved)}
+                >
+                  {saved.name}
+                </button>
+                <button
+                  type="button"
+                  className="nav-link"
+                  aria-label={`Quitar vista ${saved.name}`}
+                  onClick={() =>
+                    void write(
+                      () => repositories.views.remove(saved.id),
+                      "Vista eliminada.",
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </nav>
+          <div className="mt-auto">
+            <ReleaseNotes />
+          </div>
         </aside>
 
-        <main className="min-w-0 p-4 sm:p-6 lg:p-8">
-          <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {heading ?? "Tareas"}
-            </h1>
-            <button
-              type="button"
-              onClick={openPalette}
-              className="rounded-lg border border-line bg-paper px-3 py-2 text-sm"
-            >
-              Comandos <kbd className="ml-2 text-muted">Ctrl+K</kbd>
-            </button>
-          </header>
-
+        <main className="min-w-0 p-4 sm:p-6 md:col-start-2 md:row-start-2 md:pt-0 lg:px-8 lg:pb-8">
           <form className="mb-4 flex gap-2" onSubmit={captureTask}>
             <input
               ref={capture}
@@ -460,6 +545,45 @@ export function App() {
             </button>
           </div>
 
+          <div className="mb-4 flex flex-wrap gap-2">
+            <input
+              className="field min-w-0"
+              type="search"
+              placeholder="Buscar por título"
+              aria-label="Buscar por título"
+              value={taskSearch}
+              onChange={(event) => setTaskSearch(event.target.value)}
+            />
+            <select
+              className="field"
+              aria-label="Filtrar por estado"
+              value={statusFilter ?? ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                setStatusFilter(
+                  value === "todo" || value === "doing" || value === "done"
+                    ? value
+                    : undefined,
+                );
+              }}
+            >
+              <option value="">Todos los estados</option>
+              <option value="todo">Pendiente</option>
+              <option value="doing">En curso</option>
+              <option value="done">Hecha</option>
+            </select>
+            <form className="flex flex-wrap gap-2" onSubmit={saveCurrentView}>
+              <input
+                className="field min-w-0"
+                placeholder="Nombre de la vista"
+                aria-label="Nombre de la vista"
+                value={viewName}
+                onChange={(event) => setViewName(event.target.value)}
+                required
+              />
+              <Button type="submit">Guardar vista</Button>
+            </form>
+          </div>
           <p role="status" className="text-sm text-muted empty:hidden">
             {notice}
           </p>
@@ -481,9 +605,7 @@ export function App() {
             <div className="min-w-0 flex-1">
               {snapshot && view === "calendar" && (
                 <CalendarView
-                  items={snapshot.items.filter(
-                    (item) => !projectId || item.projectId === projectId,
-                  )}
+                  items={visible}
                   open={setSelectedId}
                   reschedule={(id, changes) =>
                     write(
@@ -541,6 +663,13 @@ export function App() {
                 key={selected.id}
                 item={selected}
                 projects={projects}
+                saveProperty={(name, value) =>
+                  write(
+                    () =>
+                      repositories.items.setProperty(selected.id, name, value),
+                    "Propiedad actualizada.",
+                  )
+                }
                 save={(changes) =>
                   write(
                     () => repositories.items.update(selected.id, changes),

@@ -39,3 +39,25 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.block-note {
+  @apply break-words;
+}
+.block-note h2 {
+  @apply text-lg font-semibold;
+}
+.block-note ul {
+  @apply list-disc pl-5;
+}
+.block-note ol {
+  @apply list-decimal pl-5;
+}
+.block-note blockquote {
+  @apply border-l-2 border-line pl-3;
+}
+.block-note pre {
+  @apply overflow-auto rounded bg-panel p-2;
+}
+.block-note a {
+  @apply text-primary underline;
+}
