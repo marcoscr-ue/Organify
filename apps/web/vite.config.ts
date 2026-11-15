@@ -6,7 +6,12 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 function offlineShell(): Plugin {
-  const publicFiles = ["manifest.webmanifest", "icon-192.png", "icon-512.png"];
+  const publicFiles = [
+    "manifest.webmanifest",
+    "icon-192.png",
+    "icon-512.png",
+    "organify-favicon.png",
+  ];
   return {
     name: "organify-offline-shell",
     apply: "build",

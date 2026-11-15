@@ -5,6 +5,16 @@ import { SyncSettings } from "./sync-settings";
 
 const releases = [
   {
+    version: "0.3.0",
+    date: "2026-11-16",
+    changes: [
+      "Nuevo logotipo en la barra lateral e icono de la aplicación.",
+      "La nota enriquecida muestra los controles de formato como iconos.",
+      "Separadores en el historial y una X centrada en los botones de cierre.",
+      "La captura rápida identifica con más claridad el texto de ejemplo.",
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-11-15",
     changes: [
@@ -40,9 +50,19 @@ export function CloseDialogButton({ onClick }: { onClick: () => void }) {
       aria-label="Cerrar"
       title="Cerrar"
       onClick={onClick}
-      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-danger/25 bg-danger/10 text-xl leading-none text-danger hover:bg-danger hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
+      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-danger/25 bg-danger/10 text-danger hover:bg-danger hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
     >
-      <span aria-hidden="true">×</span>
+      <svg
+        aria-hidden="true"
+        className="size-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      >
+        <path d="m6 6 12 12M18 6 6 18" />
+      </svg>
     </button>
   );
 }
@@ -99,9 +119,9 @@ export function ReleaseNotes() {
       trigger={`Versión ${version}`}
       triggerClass="nav-link mx-auto block font-semibold text-danger"
     >
-      <div className="grid gap-4">
+      <div className="divide-y divide-line">
         {releases.map((release) => (
-          <section key={release.version}>
+          <section key={release.version} className="py-4 first:pt-0 last:pb-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h3 className="font-semibold">Versión {release.version}</h3>
               <time dateTime={release.date} className="text-sm text-muted">
