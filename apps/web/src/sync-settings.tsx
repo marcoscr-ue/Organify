@@ -14,11 +14,14 @@ const publicKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const client = url && publicKey ? createSyncClient(url, publicKey) : undefined;
 
 export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
-  const [stop, setStop] = useState<() => void>();
+  const [connection, setConnection] = useState<{
+    email: string;
+    stop: () => void;
+  }>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [recovery, setRecovery] = useState("");
-  useEffect(() => stop, [stop]);
+  useEffect(() => connection?.stop, [connection]);
   if (!client) {
     return (
       <p className="text-sm text-muted">
@@ -99,8 +102,7 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
           "Sincronización interrumpida. Se volverá a intentar automáticamente.",
         ),
       );
-      setStop(() => pause);
-      setMessage("Sincronización en segundo plano activada.");
+      setConnection({ email: login.user.email ?? email, stop: pause });
       form.reset();
     } catch (error) {
       setMessage(
@@ -116,20 +118,26 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   return (
     <section aria-label="Sincronización" className="min-w-0 text-sm">
       <h3 className="font-semibold">Sincronización</h3>
-      {stop ? (
-        <Button
-          type="button"
-          className="mt-2"
-          onClick={() => {
-            stop();
-            setStop(undefined);
-            setRecovery("");
-            setMessage("Sincronización pausada.");
-            void api.auth.signOut({ scope: "local" });
-          }}
-        >
-          Desconectar
-        </Button>
+      {connection ? (
+        <>
+          <p className="mt-2 break-words text-muted">
+            Sincronizando datos asociados a la cuenta de correo{" "}
+            <strong>{connection.email}</strong>.
+          </p>
+          <Button
+            type="button"
+            className="mt-2"
+            onClick={() => {
+              connection.stop();
+              setConnection(undefined);
+              setRecovery("");
+              setMessage("Sincronización pausada.");
+              void api.auth.signOut({ scope: "local" });
+            }}
+          >
+            Desconectar
+          </Button>
+        </>
       ) : (
         <form onSubmit={connect} className="mt-2 grid min-w-0 gap-2">
           <label className="grid gap-1">

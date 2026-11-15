@@ -5,7 +5,18 @@ import { SyncSettings } from "./sync-settings";
 
 const releases = [
   {
+    version: "0.2.0",
+    date: "2026-11-15",
+    changes: [
+      "Abre el detalle de las tareas en una ventana centrada.",
+      "Consulta el correo asociado a la sincronización desde Cuenta.",
+      "El historial muestra la fecha de cada versión.",
+      "La barra lateral agrupa las vistas iniciales bajo Tareas.",
+    ],
+  },
+  {
     version: "0.1.0",
+    date: "2026-11-15",
     changes: [
       "Consulta el historial de actualizaciones desde la versión en la barra lateral.",
       "Conecta o desconecta la sincronización desde el icono de cuenta.",
@@ -14,8 +25,27 @@ const releases = [
   },
 ];
 
+const releaseDate = new Intl.DateTimeFormat("es-ES", {
+  dateStyle: "long",
+  timeZone: "UTC",
+});
+
 const iconButtonClass =
   "inline-flex size-10 items-center justify-center rounded-lg border border-line bg-paper hover:bg-panel focus-visible:outline-2 focus-visible:outline-offset-2";
+
+export function CloseDialogButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Cerrar"
+      title="Cerrar"
+      onClick={onClick}
+      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-danger/25 bg-danger/10 text-xl leading-none text-danger hover:bg-danger hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
+    >
+      <span aria-hidden="true">×</span>
+    </button>
+  );
+}
 
 function AppDialog({
   title,
@@ -53,15 +83,7 @@ function AppDialog({
           <h2 id={titleId} className="text-lg font-semibold">
             {title}
           </h2>
-          <form method="dialog">
-            <button
-              type="submit"
-              className="rounded px-2 py-1 text-sm text-muted hover:bg-panel"
-              autoFocus
-            >
-              Cerrar
-            </button>
-          </form>
+          <CloseDialogButton onClick={() => dialog.current?.close()} />
         </div>
         {children}
       </dialog>
@@ -73,14 +95,19 @@ export function ReleaseNotes() {
   return (
     <AppDialog
       title="Ver notas de actualizaciones"
-      label={`versión ${version}. Ver notas de actualizaciones`}
-      trigger={`versión ${version}`}
-      triggerClass="nav-link text-muted"
+      label={`Versión ${version}. Ver notas de actualizaciones`}
+      trigger={`Versión ${version}`}
+      triggerClass="nav-link mx-auto block font-semibold text-danger"
     >
       <div className="grid gap-4">
         {releases.map((release) => (
           <section key={release.version}>
-            <h3 className="font-semibold">Versión {release.version}</h3>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="font-semibold">Versión {release.version}</h3>
+              <time dateTime={release.date} className="text-sm text-muted">
+                {releaseDate.format(new Date(release.date))}
+              </time>
+            </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {release.changes.map((change) => (
                 <li key={change}>{change}</li>
