@@ -151,3 +151,28 @@ Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique
 ### Probar recordatorios
 
 Abre el detalle de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Programar**. Concede el permiso si se solicita. El aviso usa un texto genérico para no mostrar el título en la pantalla bloqueada. Prueba **Cancelar recordatorio** antes de la hora. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo, separados de la fecha y repetición del calendario.
+
+## Fase 5 · Notas en bloques, propiedades y vistas guardadas
+
+Después de actualizar `dev`, ejecuta `corepack pnpm install` y guarda el
+`pnpm-lock.yaml` actualizado junto al código. Para probarlo, arranca con
+`corepack pnpm dev`.
+
+- Abre una tarea y escribe en **Nota en bloques**. Prueba títulos, listas,
+  citas y bloques de código. Espera a que aparezca **Guardado en este
+  dispositivo** antes de cerrar. El texto de la versión anterior se puede
+  consultar en **Nota de texto anterior** y copiar al editor.
+- Añade una propiedad de texto, número o sí/no. Puedes editarla o quitarla
+  desde el detalle. Las propiedades se sincronizan por nombre.
+- Elige un proyecto, una bandeja, un estado y un formato de vista. Si
+  quieres, escribe parte del título para filtrar. Ponle nombre a la vista
+  y pulsa **Guardar vista**. Tras recargar, ábrela desde la barra lateral
+  o la paleta de comandos. Las vistas se guardan en cada dispositivo.
+
+Para probar la edición concurrente, actualiza ambos clientes a la Fase 5
+y conéctalos a la misma cuenta. Crea una nota con dos párrafos y espera a
+que aparezca en ambos. Con los dos clientes sin conexión, edita un párrafo
+distinto en cada uno y vuelve a conectarlos. Comprueba que ambos cambios
+aparecen en los dos clientes. Yjs fusiona los cambios y su contenido viaja
+por la sincronización cifrada existente. Usa la misma configuración de
+Supabase de la Fase 3.

@@ -19,7 +19,13 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   const [message, setMessage] = useState("");
   const [recovery, setRecovery] = useState("");
   useEffect(() => stop, [stop]);
-  if (!client) return null;
+  if (!client) {
+    return (
+      <p className="text-sm text-muted">
+        La sincronización no está configurada en esta instalación.
+      </p>
+    );
+  }
   const api = client;
 
   async function connect(event: FormEvent<HTMLFormElement>) {
@@ -108,8 +114,8 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   }
 
   return (
-    <details className="min-w-0 text-sm">
-      <summary className="cursor-pointer font-semibold">Sincronización</summary>
+    <section aria-label="Sincronización" className="min-w-0 text-sm">
+      <h3 className="font-semibold">Sincronización</h3>
       {stop ? (
         <Button
           type="button"
@@ -192,6 +198,6 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
           />
         </label>
       )}
-    </details>
+    </section>
   );
 }

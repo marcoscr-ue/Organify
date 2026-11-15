@@ -11,6 +11,7 @@
     "@organify/core": "workspace:*",
     "dexie": "^4.2.1",
     "fractional-indexing": "^3.2.0",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "yjs": "^13.6"
   }
 }

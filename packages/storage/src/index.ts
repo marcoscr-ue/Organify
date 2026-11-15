@@ -3,6 +3,7 @@ import type {
   Item,
   ItemChanges,
   NewItem,
+  Inbox,
   Project,
   Status,
   Op,
@@ -13,7 +14,33 @@ export interface TaskSnapshot {
   projects: Project[];
 }
 
+export interface SavedView {
+  id: Id;
+  name: string;
+  search: string;
+  inbox: Inbox;
+  projectId?: Id;
+  status?: Status;
+  layout: "list" | "board" | "calendar";
+}
+
 export interface TaskRepositories {
+  documents: {
+    subscribe(
+      id: Id,
+      next: (state: Uint8Array | undefined) => void,
+      error: (error: unknown) => void,
+    ): () => void;
+    append(id: Id, update: Uint8Array): Promise<void>;
+  };
+  views: {
+    subscribe(
+      next: (views: SavedView[]) => void,
+      error: (error: unknown) => void,
+    ): () => void;
+    save(view: Omit<SavedView, "id">): Promise<Id>;
+    remove(id: Id): Promise<void>;
+  };
   sync: {
     bind(userId: string): Promise<void>;
     pending(limit: number): Promise<Op[]>;
@@ -28,6 +55,11 @@ export interface TaskRepositories {
   items: {
     create(input: NewItem): Promise<Id>;
     update(id: Id, changes: ItemChanges): Promise<void>;
+    setProperty(
+      id: Id,
+      name: string,
+      value: string | number | boolean | null,
+    ): Promise<void>;
     move(id: Id, status: Status): Promise<void>;
     remove(id: Id): Promise<void>;
   };

@@ -80,6 +80,36 @@ export async function record(
   await db.settings.put({ key: "clock", value: clock });
 }
 
+export const propertyPrefix = "prop:";
+export const documentPrefix = "doc:";
+
+export async function recordField(
+  db: JournalTables,
+  entityId: string,
+  field: string,
+  value: Json,
+) {
+  const deviceId = (await db.settings.get("device"))?.value ?? v7();
+  const hlc = tickHlc(Date.now(), (await db.settings.get("clock"))?.value);
+  await db.settings.bulkPut([
+    { key: "device", value: deviceId },
+    { key: "clock", value: hlc },
+  ]);
+  const op: Op = {
+    v: 1,
+    id: v7(),
+    deviceId,
+    hlc,
+    entity: "item",
+    entityId,
+    kind: "set",
+    field,
+    value,
+  };
+  await db.outbox.add(op);
+  return op;
+}
+
 export async function materialize(db: JournalTables, op: Op, state: Replica) {
   const field = (name: string) => state.fields[name]?.value;
   const string = (name: string) => {
@@ -107,7 +137,22 @@ export async function materialize(db: JournalTables, op: Op, state: Replica) {
   const title = string("title");
   const status = statuses.find((value) => value === field("status"));
   if (!title || !status) return;
-  const props = field("props");
+  const legacyProps = field("props");
+  const props = new Map(
+    Object.entries(
+      legacyProps &&
+        typeof legacyProps === "object" &&
+        !Array.isArray(legacyProps)
+        ? legacyProps
+        : {},
+    ),
+  );
+  for (const [name, entry] of Object.entries(state.fields)) {
+    if (!name.startsWith(propertyPrefix)) continue;
+    const key = name.slice(propertyPrefix.length);
+    if (entry.value === null) props.delete(key);
+    else props.set(key, entry.value);
+  }
   const tags = field("tagIds");
   const allDay = field("allDay");
   await db.items.put({
@@ -126,7 +171,6 @@ export async function materialize(db: JournalTables, op: Op, state: Replica) {
     tagIds: Array.isArray(tags)
       ? tags.filter((tag): tag is string => typeof tag === "string")
       : [],
-    props:
-      props && typeof props === "object" && !Array.isArray(props) ? props : {},
+    props: Object.fromEntries(props),
   });
 }

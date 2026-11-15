@@ -1,10 +1,18 @@
+import * as Y from "yjs";
 import Dexie, { liveQuery, type Table } from "dexie";
 import { generateKeyBetween } from "fractional-indexing";
 import { v7 } from "uuid";
 import type { Id, Item, Project, Op, Replica } from "@organify/core";
 import { tickHlc } from "@organify/core";
-import { materialize, mergeReplica, record } from "./journal";
-import type { TaskRepositories } from "./index";
+import {
+  documentPrefix,
+  materialize,
+  mergeReplica,
+  propertyPrefix,
+  record,
+  recordField,
+} from "./journal";
+import type { SavedView, TaskRepositories } from "./index";
 
 class OrganifyDatabase extends Dexie {
   declare items: Table<Item, Id>;
@@ -12,6 +20,9 @@ class OrganifyDatabase extends Dexie {
   declare settings: Table<{ key: string; value: Id }, string>;
   declare replicas: Table<{ key: string; state: Replica }, string>;
   declare outbox: Table<Op, string>;
+
+  declare documents: Table<{ id: Id; state: Uint8Array }, Id>;
+  declare views: Table<SavedView, Id>;
 
   constructor(name: string) {
     super(name);
@@ -39,6 +50,7 @@ class OrganifyDatabase extends Dexie {
         for (const item of await tables.items.toArray())
           await record(tables, "item", item);
       });
+    this.version(3).stores({ documents: "id", views: "id" });
   }
 }
 
@@ -90,8 +102,54 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     db.settings,
     db.replicas,
     db.outbox,
+    db.documents,
   ];
+  async function applyDocument(id: Id, encoded: string) {
+    const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0));
+    const existing = await db.documents.get(id);
+    const state = Y.mergeUpdates(existing ? [existing.state, bytes] : [bytes]);
+    await db.documents.put({ id, state });
+  }
+
   return {
+    documents: {
+      subscribe(id, next, error) {
+        const listener = liveQuery(
+          async () => (await db.documents.get(id))?.state,
+        ).subscribe({ next, error });
+        return () => listener.unsubscribe();
+      },
+      append(id, update) {
+        return db.transaction("rw", writeTables, async () => {
+          await getItem(id);
+          const encoded = btoa(
+            Array.from(update, (byte) => String.fromCharCode(byte)).join(""),
+          );
+          await applyDocument(id, encoded);
+          // A unique field lets existing clients consume the same operation format.
+          await recordField(db, id, documentPrefix + v7(), encoded);
+        });
+      },
+    },
+    views: {
+      subscribe(next, error) {
+        const listener = liveQuery(() => db.views.toArray()).subscribe({
+          next,
+          error,
+        });
+        return () => listener.unsubscribe();
+      },
+      async save(view) {
+        const name = requiredText(
+          view.name,
+          "Escribe un nombre para la vista.",
+        );
+        const id = v7();
+        await db.views.add({ ...view, id, name });
+        return id;
+      },
+      remove: (id) => db.views.delete(id),
+    },
     sync: {
       bind(userId) {
         return db.transaction("rw", db.settings, async () => {
@@ -113,7 +171,17 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           let clock = (await db.settings.get("clock"))?.value;
           for (const op of ops) {
             clock = tickHlc(Date.now(), clock, op.hlc);
-            await materialize(db, op, await mergeReplica(db, op));
+            if (
+              op.kind === "set" &&
+              op.entity === "item" &&
+              op.field.startsWith(documentPrefix)
+            ) {
+              if (typeof op.value !== "string")
+                throw new Error("Actualización de documento inválida.");
+              await applyDocument(op.entityId, op.value);
+            } else {
+              await materialize(db, op, await mergeReplica(db, op));
+            }
           }
           if (clock) await db.settings.put({ key: "clock", value: clock });
           await db.settings.put({ key: "cursor", value: cursor });
@@ -179,6 +247,14 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           if ("recurrence" in changes) item.recurrence = changes.recurrence;
           await db.items.put(item);
           await record(db, "item", item, previous);
+        });
+      },
+      setProperty(id, name, value) {
+        const key = requiredText(name, "Escribe un nombre para la propiedad.");
+        return db.transaction("rw", writeTables, async () => {
+          await getItem(id);
+          const op = await recordField(db, id, propertyPrefix + key, value);
+          await materialize(db, op, await mergeReplica(db, op));
         });
       },
       move(id, status) {
