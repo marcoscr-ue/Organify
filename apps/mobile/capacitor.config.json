@@ -1,0 +1,5 @@
+{
+  "appId": "app.organify.personal",
+  "appName": "Organify",
+  "webDir": "../web/dist"
+}

@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
@@ -11,3 +12,16 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+if (
+  import.meta.env.PROD &&
+  "serviceWorker" in navigator &&
+  !window.__TAURI__ &&
+  !Capacitor.isNativePlatform()
+) {
+  void navigator.serviceWorker
+    .register(import.meta.env.BASE_URL + "sw.js")
+    .catch((error: unknown) =>
+      console.error("No se pudo activar el modo sin conexión.", error),
+    );
+}
