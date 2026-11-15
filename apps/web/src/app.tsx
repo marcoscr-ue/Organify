@@ -22,6 +22,7 @@ import {
   type TaskSnapshot,
 } from "@organify/storage";
 import { Button } from "@/components/ui/button";
+import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { Board } from "./board";
 import { AppControls, CloseDialogButton, ReleaseNotes } from "./app-overlays";
 import { BlockNotes } from "./block-notes";
@@ -452,7 +453,13 @@ export function App() {
           </div>
         </header>
         <aside className="flex min-w-0 flex-col gap-5 border-b border-line bg-paper p-4 md:sticky md:top-0 md:col-start-1 md:row-span-2 md:row-start-1 md:h-svh md:overflow-y-auto md:border-r md:border-b-0">
-          <p className="text-lg font-semibold tracking-tight">Organify</p>
+          <img
+            src={sidebarLogo}
+            alt="Organify"
+            width={2172}
+            height={724}
+            className="h-auto w-full max-w-48 object-contain"
+          />
           <div className="grid gap-2">
             <h2 id="task-navigation-title" className="text-sm font-semibold">
               Tareas
@@ -556,7 +563,7 @@ export function App() {
               className="field min-w-0 flex-1 bg-paper"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Reunión con Ana mañana a las 10:00"
+              placeholder="Ejemplo: Reunión con Ana mañana a las 10:00"
               aria-label="Captura rápida"
               required
             />
