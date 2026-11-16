@@ -36,7 +36,8 @@ import {
   scheduleChanges,
 } from "./calendar-schedule";
 import { parseCapture } from "./quick-capture";
-import { ProjectSelect, StatusSelect } from "./task-controls";
+import { ProjectSelect, StatusSelect, TaskStatusIcon } from "./task-controls";
+import { ProjectNavigation } from "./project-navigation";
 
 const repositories = createTaskRepositories();
 const inboxes: { id: Inbox; label: string }[] = [
@@ -239,6 +240,7 @@ export function App() {
   const [projectId, setProjectId] = useState<Id>();
   const [view, setView] = useState<"list" | "board" | "calendar">("list");
   const [selectedId, setSelectedId] = useState<Id>();
+  const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
@@ -257,6 +259,10 @@ export function App() {
   );
 
   useEffect(watchReminders, []);
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(clock);
+  }, []);
   useEffect(
     () =>
       repositories.views.subscribe(setSavedViews, () =>
@@ -380,7 +386,7 @@ export function App() {
 
   const projects = snapshot?.projects ?? [];
   const selected = snapshot?.items.find((item) => item.id === selectedId);
-  const now = new Date();
+  const today = new Date(now);
   const visible =
     snapshot?.items.filter(
       (item) =>
@@ -389,13 +395,11 @@ export function App() {
         item.title
           .toLocaleLowerCase("es")
           .includes(taskSearch.trim().toLocaleLowerCase("es")) &&
-        matchesInbox(item, view === "calendar" ? "all" : inbox, now),
+        matchesInbox(item, view === "calendar" ? "all" : inbox, today),
     ) ?? [];
-  const projectById = new Map(
-    projects.map((project) => [project.id, project.name]),
-  );
+  const projectById = new Map(projects.map((project) => [project.id, project]));
   const heading = projectId
-    ? projectById.get(projectId)
+    ? projectById.get(projectId)?.name
     : inboxes.find(({ id }) => id === (view === "calendar" ? "all" : inbox))
         ?.label;
   const commands = [
@@ -436,6 +440,7 @@ export function App() {
 
   return (
     <div className="min-h-svh">
+      <DesktopWindowControls />
       <div className="grid min-h-svh w-full grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-[auto_1fr]">
         <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 pt-4 pb-5 sm:px-6 sm:pt-6 md:col-start-2 md:row-start-1 lg:px-8 lg:pt-8">
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -452,7 +457,7 @@ export function App() {
             <AppControls store={repositories.sync} />
           </div>
         </header>
-        <aside className="flex min-w-0 flex-col gap-5 border-b border-line bg-paper p-4 md:sticky md:top-0 md:col-start-1 md:row-span-2 md:row-start-1 md:h-svh md:overflow-y-auto md:border-r md:border-b-0">
+        <aside className="flex min-w-0 flex-col gap-7 border-b border-line bg-paper p-4 md:sticky md:top-0 md:col-start-1 md:row-span-2 md:row-start-1 md:h-svh md:overflow-y-auto md:border-r md:border-b-0">
           <img
             src={sidebarLogo}
             alt="Organify"
@@ -492,15 +497,15 @@ export function App() {
               className="flex min-w-0 flex-wrap gap-1 md:grid"
             >
               {projects.map((project) => (
-                <button
+                <ProjectNavigation
                   key={project.id}
-                  type="button"
-                  aria-current={projectId === project.id ? "page" : undefined}
-                  className="nav-link w-full min-w-0"
-                  onClick={() => navigate("all", project.id)}
-                >
-                  {project.name}
-                </button>
+                  project={project}
+                  active={projectId === project.id}
+                  open={() => navigate("all", project.id)}
+                  save={(changes) =>
+                    repositories.projects.update(project.id, changes)
+                  }
+                />
               ))}
             </nav>
             <form
@@ -656,6 +661,7 @@ export function App() {
             {snapshot && view === "calendar" && (
               <CalendarView
                 items={visible}
+                projects={projectById}
                 open={openTask}
                 reschedule={(id, changes) =>
                   write(
@@ -666,40 +672,56 @@ export function App() {
               />
             )}
             {snapshot && view === "board" && (
-              <Board items={visible} open={openTask} move={move} />
+              <Board
+                items={visible}
+                projects={projectById}
+                now={now}
+                open={openTask}
+                move={move}
+              />
             )}
             {snapshot &&
               view === "list" &&
               (visible.length ? (
                 <ul className="divide-y divide-line rounded-xl border border-line bg-paper">
-                  {visible.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          className="break-words text-left font-medium hover:underline"
-                          onClick={() => openTask(item.id)}
-                        >
-                          {item.title}
-                        </button>
-                        <p className="text-sm text-muted empty:hidden">
-                          {[
-                            dateLabel(item),
-                            item.projectId && projectById.get(item.projectId),
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      <StatusSelect
-                        value={item.status}
-                        onChange={(status) => move(item.id, status)}
-                      />
-                    </li>
-                  ))}
+                  {visible.map((item) => {
+                    const project = item.projectId
+                      ? projectById.get(item.projectId)
+                      : undefined;
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                        style={
+                          project?.color
+                            ? { boxShadow: `inset 3px 0 ${project.color}` }
+                            : undefined
+                        }
+                      >
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            className="break-words text-left font-medium hover:underline"
+                            onClick={() => openTask(item.id)}
+                          >
+                            {item.title}
+                          </button>
+                          <p className="text-sm text-muted empty:hidden">
+                            {[dateLabel(item), project?.name]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <TaskStatusIcon item={item} now={now} />
+                          <StatusSelect
+                            value={item.status}
+                            onChange={(status) => move(item.id, status)}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="rounded-xl border border-line bg-paper p-4 text-sm text-muted">
@@ -794,5 +816,61 @@ export function App() {
         )}
       </dialog>
     </div>
+  );
+}
+
+type DesktopWindowApi = {
+  getCurrentWindow: () => {
+    minimize: () => Promise<void>;
+    toggleMaximize: () => Promise<void>;
+    close: () => Promise<void>;
+  };
+};
+
+function DesktopWindowControls() {
+  const [windowApi, setWindowApi] = useState<DesktopWindowApi>();
+  useEffect(() => {
+    const tauri = window as Window & {
+      __TAURI__?: { window?: DesktopWindowApi };
+    };
+    setWindowApi(tauri.__TAURI__?.window);
+  }, []);
+  if (!windowApi) return null;
+  const current = windowApi.getCurrentWindow();
+  const buttons = [
+    { label: "Minimizar", text: "−", run: () => void current.minimize() },
+    {
+      label: "Maximizar o restaurar",
+      text: "□",
+      run: () => void current.toggleMaximize(),
+    },
+    {
+      label: "Cerrar",
+      text: "×",
+      run: () => void current.close(),
+      danger: true,
+    },
+  ];
+  return (
+    <header
+      data-tauri-drag-region
+      className="flex h-9 items-center justify-between border-b border-line bg-paper pl-3 text-xs text-muted select-none [app-region:drag]"
+    >
+      <span data-tauri-drag-region>Organify</span>
+      <div className="flex h-full [app-region:no-drag]">
+        {buttons.map(({ label, text, run, danger }) => (
+          <button
+            key={label}
+            type="button"
+            aria-label={label}
+            title={label}
+            onClick={run}
+            className={`grid h-full w-12 place-items-center text-base text-foreground hover:bg-panel ${danger ? "hover:bg-danger hover:text-white" : ""}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </header>
   );
 }
