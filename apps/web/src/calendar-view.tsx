@@ -6,20 +6,33 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import { rrulestr } from "rrule";
-import type { Id, Item, ItemChanges } from "@organify/core";
+import type { Id, Item, ItemChanges, Project } from "@organify/core";
 import { localStamp, scheduleChanges, shiftSeries } from "./calendar-schedule";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin];
 
-function taskEvents(items: Item[], start: Date, end: Date): EventInput[] {
+function taskEvents(
+  items: Item[],
+  projects: ReadonlyMap<Id, Project>,
+  start: Date,
+  end: Date,
+): EventInput[] {
   return items.flatMap((item) => {
     const date = item.start ?? item.due;
     if (!date) return [];
     const anchor = new Date(date);
-    const event = {
+    const color = item.projectId
+      ? projects.get(item.projectId)?.color
+      : undefined;
+    const event: EventInput = {
       title: item.title,
       allDay: item.allDay ?? false,
       extendedProps: { taskId: item.id },
+      ...(color && {
+        borderColor: color,
+        backgroundColor: `color-mix(in srgb, ${color} 20%, white)`,
+        textColor: "#192338",
+      }),
     };
     const prefix = localStamp(anchor);
     if (!item.recurrence) {
@@ -52,10 +65,12 @@ function taskEvents(items: Item[], start: Date, end: Date): EventInput[] {
 
 export function CalendarView({
   items,
+  projects,
   open,
   reschedule,
 }: {
   items: Item[];
+  projects: ReadonlyMap<Id, Project>;
   open: (id: Id) => void;
   reschedule: (id: Id, changes: ItemChanges) => Promise<boolean>;
 }) {
@@ -81,7 +96,7 @@ export function CalendarView({
         eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         events={({ start, end }, complete, fail) => {
           try {
-            complete(taskEvents(items, start, end));
+            complete(taskEvents(items, projects, start, end));
           } catch (error) {
             fail(
               error instanceof Error

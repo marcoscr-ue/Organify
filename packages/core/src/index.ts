@@ -23,9 +23,16 @@ export interface Project {
   id: Id;
   workspaceId: Id;
   name: string;
+  color?: string;
   order: string;
   archived?: boolean;
   deletedAt?: string;
+}
+
+export type ProjectChanges = Partial<Pick<Project, "name" | "color">>;
+
+export function isProjectColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
 
 export type NewItem = Pick<Item, "title" | "projectId" | "start" | "allDay">;

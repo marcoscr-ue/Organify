@@ -2,6 +2,7 @@ import type { Table } from "dexie";
 import { v7 } from "uuid";
 import {
   mergeOp,
+  isProjectColor,
   replicaDeletedAt,
   tickHlc,
   statuses,
@@ -123,12 +124,14 @@ export async function materialize(db: JournalTables, op: Op, state: Replica) {
 
   if (op.entity === "project") {
     const name = string("name");
+    const color = field("color");
     if (name)
       await db.projects.put({
         id: op.entityId,
         workspaceId,
         order,
         name,
+        color: isProjectColor(color) ? color : undefined,
         archived: field("archived") === true,
         deletedAt,
       });

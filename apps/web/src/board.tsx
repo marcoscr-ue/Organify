@@ -11,8 +11,14 @@ import {
   type CollisionDetection,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { statuses, type Id, type Item, type Status } from "@organify/core";
-import { statusLabels } from "./task-controls";
+import {
+  statuses,
+  type Id,
+  type Item,
+  type Project,
+  type Status,
+} from "@organify/core";
+import { statusLabels, TaskStatusIcon } from "./task-controls";
 
 const collisionDetection: CollisionDetection = (args) =>
   args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
@@ -44,7 +50,17 @@ const columnCoordinates: KeyboardCoordinateGetter = (
   };
 };
 
-function Card({ item, open }: { item: Item; open: (id: Id) => void }) {
+function Card({
+  item,
+  color,
+  now,
+  open,
+}: {
+  item: Item;
+  color?: string;
+  now: number;
+  open: (id: Id) => void;
+}) {
   const {
     setNodeRef,
     setActivatorNodeRef,
@@ -58,11 +74,12 @@ function Card({ item, open }: { item: Item; open: (id: Id) => void }) {
     <li
       ref={setNodeRef}
       className={`relative flex items-start justify-between gap-2 rounded-lg border border-line bg-paper p-3 shadow-xs ${isDragging ? "z-10" : ""}`}
-      style={
-        transform
-          ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-          : undefined
-      }
+      style={{
+        transform: transform
+          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+          : undefined,
+        borderInlineStart: color ? `3px solid ${color}` : undefined,
+      }}
     >
       <button
         type="button"
@@ -71,6 +88,7 @@ function Card({ item, open }: { item: Item; open: (id: Id) => void }) {
       >
         {item.title}
       </button>
+      <TaskStatusIcon item={item} now={now} />
       <button
         type="button"
         ref={setActivatorNodeRef}
@@ -88,10 +106,14 @@ function Card({ item, open }: { item: Item; open: (id: Id) => void }) {
 function Column({
   status,
   items,
+  projects,
+  now,
   open,
 }: {
   status: Status;
   items: Item[];
+  projects: ReadonlyMap<Id, Project>;
+  now: number;
   open: (id: Id) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -106,7 +128,15 @@ function Column({
       </h2>
       <ul className="grid gap-2">
         {items.map((item) => (
-          <Card key={item.id} item={item} open={open} />
+          <Card
+            key={item.id}
+            item={item}
+            now={now}
+            color={
+              item.projectId ? projects.get(item.projectId)?.color : undefined
+            }
+            open={open}
+          />
         ))}
       </ul>
     </section>
@@ -115,10 +145,14 @@ function Column({
 
 export function Board({
   items,
+  projects,
+  now,
   open,
   move,
 }: {
   items: Item[];
+  projects: ReadonlyMap<Id, Project>;
+  now: number;
   open: (id: Id) => void;
   move: (id: Id, status: Status) => void;
 }) {
@@ -148,6 +182,8 @@ export function Board({
             key={status}
             status={status}
             items={items.filter((item) => item.status === status)}
+            projects={projects}
+            now={now}
             open={open}
           />
         ))}

@@ -1,10 +1,41 @@
-import { statuses, type Project, type Status } from "@organify/core";
+import { statuses, type Item, type Project, type Status } from "@organify/core";
+import { isOverdue } from "./task-deadline";
 
 export const statusLabels: Record<Status, string> = {
   todo: "Pendiente",
   doing: "En curso",
   done: "Hecha",
 };
+
+export function TaskStatusIcon({ item, now }: { item: Item; now: number }) {
+  const done = item.status === "done";
+  if (!done && !isOverdue(item, now)) return null;
+
+  const label = done ? "Tarea completada" : "Tarea vencida";
+  return (
+    <svg
+      role="img"
+      aria-label={label}
+      className={`size-5 shrink-0 ${done ? "text-green-700" : "text-danger"}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <title>{label}</title>
+      {done ? (
+        <path d="m5 12 4 4L19 6" />
+      ) : (
+        <>
+          <circle cx="12" cy="13" r="7" />
+          <path d="M12 9v4l2 2M5 3 2 6m17-3 3 3M7 19l-2 2m12-2 2 2" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 export function StatusSelect({
   value,
