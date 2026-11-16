@@ -5,6 +5,7 @@ import type {
   NewItem,
   Inbox,
   Project,
+  ProjectChanges,
   Status,
   Op,
 } from "@organify/core";
@@ -65,6 +66,7 @@ export interface TaskRepositories {
   };
   projects: {
     create(name: string): Promise<Id>;
+    update(id: Id, changes: ProjectChanges): Promise<void>;
   };
 }
 

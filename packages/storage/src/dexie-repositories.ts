@@ -3,7 +3,7 @@ import Dexie, { liveQuery, type Table } from "dexie";
 import { generateKeyBetween } from "fractional-indexing";
 import { v7 } from "uuid";
 import type { Id, Item, Project, Op, Replica } from "@organify/core";
-import { tickHlc } from "@organify/core";
+import { isProjectColor, tickHlc } from "@organify/core";
 import {
   documentPrefix,
   materialize,
@@ -51,6 +51,22 @@ class OrganifyDatabase extends Dexie {
           await record(tables, "item", item);
       });
     this.version(3).stores({ documents: "id", views: "id" });
+    this.version(4)
+      .stores({})
+      .upgrade(async (tx) => {
+        // Older clients kept color operations in the journal without displaying them.
+        const projects = tx.table<Project, Id>("projects");
+        const ids = await projects.toCollection().primaryKeys();
+        const replicas = await tx
+          .table<{ key: string; state: Replica }, string>("replicas")
+          .bulkGet(ids.map((id) => `project:${id}`));
+        for (const row of replicas) {
+          const color = row?.state.fields.color;
+          if (color && isProjectColor(color.value)) {
+            await projects.update(color.entityId, { color: color.value });
+          }
+        }
+      });
   }
 }
 
@@ -73,12 +89,12 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     return value;
   }
 
-  async function checkProject(id: Id | undefined): Promise<void> {
-    if (!id) return;
+  async function getProject(id: Id): Promise<Project> {
     const project = await db.projects.get(id);
     if (!project || project.deletedAt || project.archived) {
       throw new Error("El proyecto ya no está disponible.");
     }
+    return project;
   }
 
   async function getItem(id: Id): Promise<Item> {
@@ -208,7 +224,7 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           "Escribe un título para la tarea.",
         );
         return db.transaction("rw", writeTables, async () => {
-          await checkProject(input.projectId);
+          if (input.projectId) await getProject(input.projectId);
           const id = v7();
           const item: Item = {
             ...input,
@@ -231,7 +247,7 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           const previous = await getItem(id);
           const item = { ...previous };
           if ("projectId" in changes) {
-            await checkProject(changes.projectId);
+            if (changes.projectId) await getProject(changes.projectId);
             item.projectId = changes.projectId;
           }
           if (changes.title !== undefined) {
@@ -292,6 +308,26 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           await db.projects.add(project);
           await record(db, "project", project);
           return id;
+        });
+      },
+      update(id, changes) {
+        return db.transaction("rw", writeTables, async () => {
+          const previous = await getProject(id);
+          const project = { ...previous };
+          if (changes.name !== undefined) {
+            project.name = requiredText(
+              changes.name,
+              "Escribe un nombre para el proyecto.",
+            );
+          }
+          if ("color" in changes) {
+            if (changes.color !== undefined && !isProjectColor(changes.color)) {
+              throw new Error("Elige un color válido para el proyecto.");
+            }
+            project.color = changes.color?.toLowerCase();
+          }
+          await db.projects.put(project);
+          await record(db, "project", project, previous);
         });
       },
     },

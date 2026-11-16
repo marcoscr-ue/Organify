@@ -5,6 +5,16 @@ import { SyncSettings } from "./sync-settings";
 
 const releases = [
   {
+    version: "0.5.0",
+    date: "2026-11-16",
+    changes: [
+      "Las tareas vencidas muestran una alarma roja y las hechas, un check verde.",
+      "Renombra y cambia el color de un proyecto desde su menú en la barra lateral.",
+      "Las tareas heredan el color de su proyecto.",
+      "Más espacio entre las secciones de la barra lateral.",
+    ],
+  },
+  {
     version: "0.4.1",
     date: "2026-11-16",
     changes: [
@@ -51,14 +61,21 @@ const releaseDate = new Intl.DateTimeFormat("es-ES", {
 const iconButtonClass =
   "inline-flex size-10 items-center justify-center rounded-lg border border-line bg-paper hover:bg-panel focus-visible:outline-2 focus-visible:outline-offset-2";
 
-export function CloseDialogButton({ onClick }: { onClick: () => void }) {
+export function CloseDialogButton({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       aria-label="Cerrar"
       title="Cerrar"
       onClick={onClick}
-      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-danger/25 bg-danger/10 text-danger hover:bg-danger hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
+      disabled={disabled}
+      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-danger/25 bg-danger/10 text-danger enabled:hover:bg-danger enabled:hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-50"
     >
       <svg
         aria-hidden="true"
