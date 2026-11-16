@@ -5,6 +5,14 @@ import { SyncSettings } from "./sync-settings";
 
 const releases = [
   {
+    version: "0.4.0",
+    date: "2026-11-16",
+    changes: [
+      "Las compilaciones de Windows con actualizador buscan nuevas versiones al arrancar.",
+      "La sincronización comprueba la compatibilidad con el servidor.",
+    ],
+  },
+  {
     version: "0.3.0",
     date: "2026-11-16",
     changes: [

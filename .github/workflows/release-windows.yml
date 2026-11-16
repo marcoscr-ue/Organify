@@ -1,0 +1,54 @@
+name: Publicar Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Preparar configuración del actualizador
+        env:
+          UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+          UPDATER_ENDPOINT: ${{ vars.TAURI_UPDATER_ENDPOINT }}
+        run: |
+          if (-not $env:UPDATER_PUBLIC_KEY -or $env:UPDATER_ENDPOINT -notmatch '^https://') {
+            throw 'Configura TAURI_UPDATER_PUBLIC_KEY y TAURI_UPDATER_ENDPOINT antes de publicar.'
+          }
+          $configPath = Join-Path $env:RUNNER_TEMP 'organify-updater.json'
+          @{
+            bundle = @{ createUpdaterArtifacts = $true }
+            plugins = @{
+              updater = @{
+                pubkey = $env:UPDATER_PUBLIC_KEY
+                endpoints = @($env:UPDATER_ENDPOINT)
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding utf8
+          "ORGANIFY_UPDATER_CONFIG=$configPath" >> $env:GITHUB_ENV
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm exec tauri
+          args: --config "${{ env.ORGANIFY_UPDATER_CONFIG }}"
+          tagName: v__VERSION__
+          releaseName: Organify v__VERSION__
+          releaseDraft: true
+          includeUpdaterJson: true
