@@ -12,7 +12,10 @@ const updated = original.replace(
   /(<activity\b[^>]*\bandroid:name\s*=\s*")(?:app\.organify\.personal\.|\.)MainActivity(")/,
   "$1app.organify.personal.UpdateActivity$2",
 );
-if (updated === original && !original.includes('"app.organify.personal.UpdateActivity"')) {
+if (
+  updated === original &&
+  !original.includes('"app.organify.personal.UpdateActivity"')
+) {
   throw new Error("No se encontró MainActivity en AndroidManifest.xml.");
 }
 
