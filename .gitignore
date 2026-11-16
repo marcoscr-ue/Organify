@@ -1,4 +1,8 @@
 node_modules/
 dist/
 coverage/
+apps/web/.env.local
 *.tsbuildinfo
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/mobile/android/

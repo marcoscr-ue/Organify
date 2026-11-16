@@ -1,6 +1,6 @@
 {
   "name": "@organify/web",
-  "version": "0.0.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,12 +10,34 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@capacitor/core": "^8",
+    "@capacitor/local-notifications": "^8.3.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@fullcalendar/core": "6.1.19",
+    "@fullcalendar/daygrid": "6.1.19",
+    "@fullcalendar/interaction": "6.1.19",
+    "@fullcalendar/list": "6.1.19",
+    "@fullcalendar/react": "6.1.19",
+    "@fullcalendar/timegrid": "6.1.19",
+    "@organify/core": "workspace:*",
+    "@organify/crypto": "workspace:*",
+    "@organify/storage": "workspace:*",
+    "@organify/sync": "workspace:*",
     "@radix-ui/react-slot": "^1.2.3",
+    "chrono-node": "^2.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwind-merge": "^3.4.0"
+    "rrule": "^2.8.1",
+    "tailwind-merge": "^3.4.0",
+    "@tiptap/react": "^3",
+    "@tiptap/pm": "^3",
+    "@tiptap/starter-kit": "^3",
+    "@tiptap/extension-collaboration": "^3",
+    "@tiptap/y-tiptap": "^3",
+    "y-protocols": "^1",
+    "yjs": "^13.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
