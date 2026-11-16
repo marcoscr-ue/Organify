@@ -1,10 +1,10 @@
 {
   "name": "@organify/mobile",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {
-    "android:add": "cap add android && node android-icon.mjs",
-    "android:sync": "corepack pnpm --filter @organify/web build && cap sync android && node android-icon.mjs",
+    "android:add": "cap add android && node android-icon.mjs && node android-updater.mjs",
+    "android:sync": "corepack pnpm --filter @organify/web build && cap sync android && node android-icon.mjs && node android-updater.mjs",
     "android:open": "cap open android"
   },
   "dependencies": {

@@ -1,8 +1,27 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Entry, SyncAdapter } from "./engine";
 
+export const SYNC_PROTOCOL = 1;
+
 export function createSyncClient(url: string, publicKey: string) {
-  return createClient(url, publicKey, { auth: { persistSession: false } });
+  return createClient(url, publicKey, {
+    auth: { persistSession: false },
+    global: { headers: { "x-organify-sync-protocol": String(SYNC_PROTOCOL) } },
+  });
+}
+
+export async function checkSyncProtocol(client: SupabaseClient) {
+  const { error } = await client.rpc("organify_check_sync_protocol");
+  if (error) throw error;
+}
+
+export function isSyncProtocolError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "PT426"
+  );
 }
 
 export function supabaseAdapter(

@@ -5,13 +5,22 @@ import {
   unlockKey,
   type KeyEnvelope,
 } from "@organify/crypto";
-import { createSyncClient, supabaseAdapter, SyncEngine } from "@organify/sync";
+import {
+  checkSyncProtocol,
+  createSyncClient,
+  isSyncProtocolError,
+  supabaseAdapter,
+  SyncEngine,
+} from "@organify/sync";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const publicKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const client = url && publicKey ? createSyncClient(url, publicKey) : undefined;
+
+const protocolMessage =
+  "Esta versión no es compatible con la sincronización. Actualiza Organify e inténtalo de nuevo. Puedes seguir trabajando en local.";
 
 export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   const [connection, setConnection] = useState<{
@@ -58,6 +67,7 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
       const { data: login, error: loginError } =
         await api.auth.signInWithPassword({ email, password });
       if (loginError) throw loginError;
+      await checkSyncProtocol(api);
       const userId = login.user.id;
       const { data: existing, error } = await api
         .from("key_envelopes")
@@ -97,18 +107,27 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
         supabaseAdapter(api, userId),
         createOpCodec(userId, key),
       );
-      const pause = engine.start(() =>
+      const pause = engine.start((error) => {
+        if (isSyncProtocolError(error)) {
+          pause();
+          setConnection(undefined);
+          setMessage(protocolMessage);
+          void api.auth.signOut({ scope: "local" });
+          return;
+        }
         setMessage(
           "Sincronización interrumpida. Se volverá a intentar automáticamente.",
-        ),
-      );
+        );
+      });
       setConnection({ email: login.user.email ?? email, stop: pause });
       form.reset();
     } catch (error) {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "No se pudo iniciar la sincronización.",
+        isSyncProtocolError(error)
+          ? protocolMessage
+          : error instanceof Error
+            ? error.message
+            : "No se pudo iniciar la sincronización. Comprueba la conexión y la configuración del servidor.",
       );
     } finally {
       setBusy(false);
