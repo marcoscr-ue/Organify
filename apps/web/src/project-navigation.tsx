@@ -90,13 +90,11 @@ export function ProjectNavigation({
           className="nav-link flex min-w-0 flex-1 items-center gap-2"
           onClick={open}
         >
-          {project.color && (
-            <span
-              aria-hidden="true"
-              className="size-2.5 shrink-0 rounded-full border border-foreground/30"
-              style={{ backgroundColor: project.color }}
-            />
-          )}
+          <span
+            aria-hidden="true"
+            className="project-dot"
+            style={{ backgroundColor: project.color }}
+          />
           <span className="min-w-0 break-words">{project.name}</span>
         </button>
         <button

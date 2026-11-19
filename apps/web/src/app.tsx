@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type PointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -16,36 +17,67 @@ import {
   type Project,
   type Status,
 } from "@organify/core";
-import {
-  createTaskRepositories,
-  type SavedView,
-  type TaskSnapshot,
-} from "@organify/storage";
+import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { Board } from "./board";
+import { CalendarView } from "./calendar-view";
 import { AppControls, CloseDialogButton, ReleaseNotes } from "./app-overlays";
 import { BlockNotes } from "./block-notes";
-import { TaskProperties } from "./task-properties";
-import { ReminderForm } from "./reminder-form";
-import { cancelReminder, watchReminders } from "./reminders";
-import { CalendarView } from "./calendar-view";
+import {
+  cancelReminder,
+  isAndroid,
+  reminderTime,
+  scheduleReminder,
+  watchReminders,
+} from "./reminders";
 import {
   localStamp,
   repeatOptions,
   scheduleChanges,
 } from "./calendar-schedule";
 import { parseCapture } from "./quick-capture";
-import { ProjectSelect, StatusSelect, TaskStatusIcon } from "./task-controls";
+import {
+  ProjectSelect,
+  StatusSelect,
+  statusLabels,
+  TaskStatusIcon,
+} from "./task-controls";
 import { ProjectNavigation } from "./project-navigation";
+import { InterfaceIcon } from "./interface-icon";
 
 const repositories = createTaskRepositories();
 const inboxes: { id: Inbox; label: string }[] = [
-  { id: "all", label: "Todas" },
   { id: "today", label: "Hoy" },
+  { id: "all", label: "Todas" },
   { id: "upcoming", label: "Próximas" },
   { id: "undated", label: "Sin fecha" },
 ];
+const inboxIcons = {
+  all: "inbox",
+  today: "sun",
+  upcoming: "calendar",
+  undated: "clock",
+} as const;
+const layouts = [
+  { id: "list", label: "Lista", icon: "list" },
+  { id: "board", label: "Tablero", icon: "board" },
+  { id: "calendar", label: "Calendario", icon: "calendar" },
+] as const;
+type Layout = (typeof layouts)[number]["id"];
+const weekday = new Intl.DateTimeFormat("es-ES", { weekday: "long" });
+const month = new Intl.DateTimeFormat("es-ES", { month: "long" });
+
+function formatToday(date: Date) {
+  const day = weekday.format(date);
+  return `${day.charAt(0).toLocaleUpperCase("es-ES")}${day.slice(1)}, ${date.getDate()} de ${month.format(date)}, ${date.getFullYear()}`;
+}
+
+function closeDisclosure(target: HTMLElement) {
+  const disclosure = target.closest("details");
+  disclosure?.querySelector("summary")?.focus();
+  disclosure?.removeAttribute("open");
+}
 
 function dateLabel(item: Item): string | undefined {
   const date = item.start ?? item.due;
@@ -59,18 +91,15 @@ function dateLabel(item: Item): string | undefined {
 function TaskDetail({
   item,
   projects,
+  startEditing,
   save,
-  saveProperty,
   remove,
   close,
   feedback,
 }: {
   item: Item;
   projects: Project[];
-  saveProperty: (
-    name: string,
-    value: string | number | boolean | null,
-  ) => Promise<boolean>;
+  startEditing: boolean;
   save: (changes: ItemChanges) => Promise<boolean>;
   remove: () => void;
   close: () => void;
@@ -78,6 +107,18 @@ function TaskDetail({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const formId = useId();
+  const titleInput = useRef<HTMLInputElement>(null);
+  const dialogHeading = useRef<HTMLHeadingElement>(null);
+  const drag = useRef<{
+    pointerX: number;
+    pointerY: number;
+    x: number;
+    y: number;
+    bounds: DOMRect;
+  }>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [editing, setEditing] = useState(startEditing);
   const [title, setTitle] = useState(item.title);
   const [projectId, setProjectId] = useState(item.projectId ?? "");
   const scheduled = item.start ?? item.due;
@@ -89,12 +130,66 @@ function TaskDetail({
   const selectedTime = time ?? (item.allDay ? "" : local.slice(11, 16));
   const selectedRecurrence = recurrence ?? item.recurrence ?? "";
   const [saving, setSaving] = useState(false);
+  const [reminderDraft, setReminderDraft] = useState<string>();
+  const [reminderError, setReminderError] = useState("");
+  const project = projects.find(({ id }) => id === item.projectId);
+  const reminder = reminderTime(item.id);
+  const currentReminder = reminder
+    ? localStamp(new Date(reminder)).slice(0, 16)
+    : "";
 
   useLayoutEffect(() => {
     const modal = dialog.current;
     modal?.showModal();
     return () => modal?.close();
   }, []);
+
+  useLayoutEffect(() => {
+    if (editing) titleInput.current?.focus();
+    else dialogHeading.current?.focus();
+  }, [editing]);
+
+  useEffect(() => {
+    function resetPosition() {
+      drag.current = null;
+      setPosition({ x: 0, y: 0 });
+    }
+    window.addEventListener("resize", resetPosition);
+    return () => window.removeEventListener("resize", resetPosition);
+  }, []);
+
+  function moveDialog(event: PointerEvent<HTMLDivElement>) {
+    const origin = drag.current;
+    if (!origin) return;
+    const { bounds } = origin;
+    const dx = Math.max(
+      8 - bounds.left,
+      Math.min(
+        window.innerWidth - 8 - bounds.right,
+        event.clientX - origin.pointerX,
+      ),
+    );
+    const dy = Math.max(
+      8 - bounds.top,
+      Math.min(
+        window.innerHeight - 8 - bounds.bottom,
+        event.clientY - origin.pointerY,
+      ),
+    );
+    setPosition({ x: origin.x + dx, y: origin.y + dy });
+  }
+
+  function changeMode(next: boolean) {
+    setTitle(item.title);
+    setProjectId(item.projectId ?? "");
+    setDate(undefined);
+    setTime(undefined);
+    setRecurrence(undefined);
+    setReminderDraft(undefined);
+    setReminderError("");
+    setPosition({ x: 0, y: 0 });
+    setEditing(next);
+  }
 
   function dismiss() {
     dialog.current?.close();
@@ -104,6 +199,20 @@ function TaskDetail({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
+    setReminderError("");
+    const reminderChanged =
+      reminderDraft !== undefined && reminderDraft !== currentReminder;
+    const reminderAt = reminderDraft
+      ? new Date(reminderDraft).getTime()
+      : undefined;
+    if (
+      reminderChanged &&
+      reminderAt !== undefined &&
+      (!Number.isFinite(reminderAt) || reminderAt <= Date.now())
+    ) {
+      setReminderError("Elige una fecha y hora futuras para el recordatorio.");
+      return;
+    }
     setSaving(true);
     try {
       const scheduleEdited =
@@ -115,16 +224,30 @@ function TaskDetail({
         ? scheduleChanges(item, start, !selectedTime, selectedRecurrence)
         : {};
       if (
-        await save({
+        !(await save({
           title,
           projectId: projectId || undefined,
           ...schedule,
-        })
-      ) {
-        setDate(undefined);
-        setTime(undefined);
-        setRecurrence(undefined);
+        }))
+      )
+        return;
+      if (reminderChanged) {
+        try {
+          if (reminderAt === undefined) await cancelReminder(item.id);
+          else await scheduleReminder(item.id, reminderAt);
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "No se pudo guardar el recordatorio.";
+          setReminderError(
+            `La tarea se guardó, pero el recordatorio no se pudo actualizar. ${message}`,
+          );
+          return;
+        }
       }
+      setPosition({ x: 0, y: 0 });
+      setEditing(false);
     } finally {
       setSaving(false);
     }
@@ -133,99 +256,237 @@ function TaskDetail({
   return (
     <dialog
       ref={dialog}
+      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
       className="m-auto max-h-[calc(100dvh-2rem)] w-[min(42rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-line bg-paper text-foreground shadow-xl backdrop:bg-black/35"
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        dismiss();
+        if (!saving) dismiss();
       }}
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-paper px-5 py-3">
-        <h2 id={titleId} className="text-lg font-semibold">
-          Detalle de tarea
-        </h2>
-        <CloseDialogButton onClick={dismiss} />
+      <div
+        className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-line bg-paper px-5 py-4 sm:cursor-grab sm:select-none"
+        onPointerDown={(event) => {
+          if (
+            event.pointerType !== "mouse" ||
+            event.button !== 0 ||
+            (event.target as Element).closest("button")
+          )
+            return;
+          const bounds = dialog.current?.getBoundingClientRect();
+          if (!bounds) return;
+          drag.current = {
+            ...position,
+            bounds,
+            pointerX: event.clientX,
+            pointerY: event.clientY,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={moveDialog}
+        onLostPointerCapture={() => {
+          drag.current = null;
+        }}
+      >
+        <div className="min-w-0">
+          <h2
+            ref={dialogHeading}
+            tabIndex={-1}
+            id={titleId}
+            className="text-xl font-semibold wrap-anywhere outline-none"
+          >
+            {editing ? "Editar tarea" : item.title}
+          </h2>
+          {!editing && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+              {project && (
+                <span className="project-tag">
+                  <span
+                    aria-hidden="true"
+                    className="project-dot"
+                    style={{ backgroundColor: project.color }}
+                  />
+                  {project.name}
+                </span>
+              )}
+              {scheduled && (
+                <span className="inline-flex items-center gap-1">
+                  <InterfaceIcon name="calendar" />
+                  {dateLabel(item)}
+                </span>
+              )}
+              <span>{statusLabels[item.status]}</span>
+            </div>
+          )}
+        </div>
+        <CloseDialogButton onClick={dismiss} disabled={saving} />
       </div>
       <div className="p-5">
         {feedback}
-        <form className="grid gap-3" onSubmit={submit}>
-          <label className="grid gap-1 text-sm">
-            Título
-            <input
-              className="field"
-              value={title}
-              required
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Proyecto
-            <ProjectSelect
-              value={projectId}
-              onChange={setProjectId}
-              projects={projects}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Fecha
-            <input
-              type="date"
-              className="field min-w-0"
-              value={selectedDate}
-              onChange={(event) => setDate(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Hora (opcional)
-            <input
-              type="time"
-              className="field min-w-0"
-              value={selectedDate ? selectedTime : ""}
-              disabled={!selectedDate}
-              onChange={(event) => setTime(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Repetición
-            <select
-              className="field min-w-0"
-              disabled={!selectedDate}
-              value={selectedDate ? selectedRecurrence : ""}
-              onChange={(event) => setRecurrence(event.target.value)}
-            >
-              {repeatOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedDate && selectedRecurrence && (
-            <p className="text-sm text-muted">
-              Los cambios se aplican a toda la serie.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={saving}>
-              Guardar
-            </Button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={remove}
-              className="rounded px-2 py-1 text-sm text-danger hover:underline"
-            >
-              Eliminar
-            </button>
-          </div>
-        </form>
+        {editing && (
+          <form
+            id={formId}
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            onSubmit={submit}
+          >
+            <label className="grid gap-1 text-sm sm:col-span-2">
+              Título
+              <input
+                ref={titleInput}
+                className="field"
+                value={title}
+                required
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Proyecto
+              <ProjectSelect
+                value={projectId}
+                onChange={setProjectId}
+                projects={projects}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Fecha
+              <input
+                type="date"
+                className="field min-w-0"
+                value={selectedDate}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Hora (opcional)
+              <input
+                type="time"
+                className="field min-w-0"
+                value={selectedDate ? selectedTime : ""}
+                disabled={!selectedDate}
+                onChange={(event) => setTime(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Repetición
+              <select
+                className="field min-w-0"
+                disabled={!selectedDate}
+                value={selectedDate ? selectedRecurrence : ""}
+                onChange={(event) => setRecurrence(event.target.value)}
+              >
+                {repeatOptions.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedDate && selectedRecurrence && (
+              <p className="text-sm text-muted sm:col-span-2">
+                Los cambios se aplican a toda la serie.
+              </p>
+            )}
+          </form>
+        )}
         <BlockNotes
           id={item.id}
           legacy={item.notes}
           documents={repositories.documents}
+          editable={editing}
         />
-        <TaskProperties values={item.props} save={saveProperty} />
-        <ReminderForm taskId={item.id} />
+        {editing ? (
+          <div className="mt-4 grid gap-2 border-t border-line pt-4 text-sm">
+            <label className="grid gap-1">
+              Recordatorio en este dispositivo
+              <input
+                className="field min-w-0"
+                type="datetime-local"
+                form={formId}
+                value={reminderDraft ?? currentReminder}
+                onChange={(event) => setReminderDraft(event.target.value)}
+                disabled={saving}
+              />
+            </label>
+            {(reminderDraft ?? currentReminder) && (
+              <button
+                type="button"
+                className="nav-link justify-self-start"
+                disabled={saving}
+                onClick={() => setReminderDraft("")}
+              >
+                Quitar recordatorio
+              </button>
+            )}
+            <p className="text-muted">
+              {isAndroid
+                ? "Android puede retrasar el aviso para ahorrar batería."
+                : "Mantén la aplicación abierta para recibir el aviso."}
+            </p>
+            {reminderError && (
+              <p role="alert" className="text-danger">
+                {reminderError}
+              </p>
+            )}
+          </div>
+        ) : (
+          reminder !== undefined && (
+            <p className="mt-3 flex items-center gap-2 rounded-md bg-panel p-3 text-sm text-muted">
+              <InterfaceIcon name="clock" className="size-4 shrink-0" />
+              Recordatorio en este dispositivo:{" "}
+              {new Date(reminder).toLocaleString("es")}
+            </p>
+          )
+        )}
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="nav-link"
+                disabled={saving}
+                onClick={() => changeMode(false)}
+              >
+                Cancelar
+              </button>
+              <Button
+                key="save"
+                className="gap-1.5"
+                type="submit"
+                form={formId}
+                disabled={saving}
+              >
+                <InterfaceIcon name="save" />
+                Guardar
+              </Button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="nav-link" onClick={dismiss}>
+                Cerrar
+              </button>
+              <Button
+                key="edit"
+                type="button"
+                className="gap-1.5"
+                onClick={(event) => {
+                  event.preventDefault();
+                  changeMode(true);
+                }}
+              >
+                <InterfaceIcon name="edit" />
+                Editar tarea
+              </Button>
+              <Button
+                type="button"
+                className="gap-1.5 bg-danger text-white hover:bg-danger/90"
+                onClick={remove}
+              >
+                <InterfaceIcon name="trash" />
+                Eliminar
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </dialog>
   );
@@ -236,20 +497,20 @@ export function App() {
   const [readError, setReadError] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [inbox, setInbox] = useState<Inbox>("all");
+  const [inbox, setInbox] = useState<Inbox>("today");
   const [projectId, setProjectId] = useState<Id>();
-  const [view, setView] = useState<"list" | "board" | "calendar">("list");
+  const [layout, setLayout] = useState<Layout>("list");
   const [selectedId, setSelectedId] = useState<Id>();
+  const [startEditing, setStartEditing] = useState(false);
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [taskSearch, setTaskSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status>();
-  const [viewName, setViewName] = useState("");
   const [query, setQuery] = useState("");
+  const [reminderAlert, setReminderAlert] = useState<Id>();
   const capture = useRef<HTMLInputElement>(null);
   const palette = useRef<HTMLDialogElement>(null);
 
@@ -258,45 +519,11 @@ export function App() {
     [],
   );
 
-  useEffect(watchReminders, []);
+  useEffect(() => watchReminders(setReminderAlert), []);
   useEffect(() => {
     const clock = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => window.clearInterval(clock);
   }, []);
-  useEffect(
-    () =>
-      repositories.views.subscribe(setSavedViews, () =>
-        setError("No se pudieron leer las vistas guardadas."),
-      ),
-    [],
-  );
-
-  function openSavedView(saved: SavedView) {
-    navigate(saved.inbox, saved.projectId);
-    setTaskSearch(saved.search);
-    setStatusFilter(saved.status);
-    setView(saved.layout);
-  }
-
-  async function saveCurrentView(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (
-      await write(
-        () =>
-          repositories.views.save({
-            name: viewName,
-            search: taskSearch,
-            inbox: view === "calendar" ? "all" : inbox,
-            projectId,
-            status: statusFilter,
-            layout: view,
-          }),
-        "Vista guardada.",
-      )
-    )
-      setViewName("");
-  }
-
   function openPalette() {
     if (!document.querySelector("dialog[open]")) {
       setQuery("");
@@ -316,7 +543,7 @@ export function App() {
   }, []);
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
-    if (view === "calendar" && nextInbox !== "all") setView("list");
+    if (layout === "calendar" && nextInbox !== "all") setLayout("list");
     setInbox(nextInbox);
     setTaskSearch("");
     setStatusFilter(undefined);
@@ -324,10 +551,20 @@ export function App() {
     setSelectedId(undefined);
   }
 
-  function openTask(id: Id) {
+  function openTask(id: Id, edit = false) {
     setNotice("");
     setError("");
+    setStartEditing(edit);
     setSelectedId(id);
+  }
+
+  async function removeTask(item: Item) {
+    if (!window.confirm(`¿Eliminar «${item.title}»?`)) return;
+    const removed = await write(async () => {
+      await cancelReminder(item.id);
+      await repositories.items.remove(item.id);
+    }, "Tarea eliminada.");
+    if (removed) setSelectedId((id) => (id === item.id ? undefined : id));
   }
 
   async function write(
@@ -360,6 +597,7 @@ export function App() {
         projectId,
       });
       setInbox("all");
+      setStartEditing(true);
       setSelectedId(id);
     }, "Tarea creada.");
     if (created) setInput("");
@@ -386,7 +624,14 @@ export function App() {
 
   const projects = snapshot?.projects ?? [];
   const selected = snapshot?.items.find((item) => item.id === selectedId);
+  const reminderTitle = snapshot?.items.find(
+    (item) => item.id === reminderAlert,
+  )?.title;
   const today = new Date(now);
+  const todayItems =
+    snapshot?.items.filter((item) => matchesInbox(item, "today", today)) ?? [];
+  const doneToday = todayItems.filter((item) => item.status === "done").length;
+  const activeInbox = layout === "calendar" ? "all" : inbox;
   const visible =
     snapshot?.items.filter(
       (item) =>
@@ -395,25 +640,23 @@ export function App() {
         item.title
           .toLocaleLowerCase("es")
           .includes(taskSearch.trim().toLocaleLowerCase("es")) &&
-        matchesInbox(item, view === "calendar" ? "all" : inbox, today),
+        matchesInbox(item, activeInbox, today),
     ) ?? [];
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const heading = projectId
     ? projectById.get(projectId)?.name
-    : inboxes.find(({ id }) => id === (view === "calendar" ? "all" : inbox))
-        ?.label;
+    : inboxes.find(({ id }) => id === activeInbox)?.label;
+  const isToday = !projectId && activeInbox === "today";
+  const openCount = visible.filter((item) => item.status !== "done").length;
   const commands = [
     { label: "Capturar tarea", run: () => capture.current?.focus() },
-    { label: "Abrir lista", run: () => setView("list") },
-    { label: "Abrir tablero", run: () => setView("board") },
-    { label: "Abrir calendario", run: () => setView("calendar") },
+    ...layouts.map(({ id, label }) => ({
+      label: `Abrir ${label.toLocaleLowerCase("es")}`,
+      run: () => setLayout(id),
+    })),
     ...inboxes.map(({ id, label }) => ({
       label: `Ir a ${label}`,
       run: () => navigate(id),
-    })),
-    ...savedViews.map((saved) => ({
-      label: `Abrir vista ${saved.name}`,
-      run: () => openSavedView(saved),
     })),
     ...projects.map(({ id, name }) => ({
       label: `Abrir proyecto ${name}`,
@@ -441,57 +684,73 @@ export function App() {
   return (
     <div className="min-h-svh">
       <DesktopWindowControls />
-      <div className="grid min-h-svh w-full grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_minmax(0,1fr)] md:grid-rows-[auto_1fr]">
-        <header className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 pt-4 pb-5 sm:px-6 sm:pt-6 md:col-start-2 md:row-start-1 lg:px-8 lg:pt-8">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {heading ?? "Tareas"}
-          </h1>
-          <div className="ml-auto flex items-center gap-2">
+      <div className="app-shell">
+        <header className="app-topbar">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted">
+            <span className="hidden sm:inline">Espacio de trabajo</span>
+            <span aria-hidden="true" className="hidden sm:inline">
+              /
+            </span>
+            <span className="break-all font-semibold text-foreground">
+              {heading ?? "Tareas"}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={openPalette}
-              className="rounded-lg border border-line bg-paper px-3 py-2 text-sm"
+              className="topbar-button gap-2 px-2.5"
+              aria-label="Comandos"
             >
-              Comandos <kbd className="ml-2 text-muted">Ctrl+K</kbd>
+              <InterfaceIcon name="search" />
+              <span className="hidden sm:inline">Comandos</span>
+              <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
             <AppControls store={repositories.sync} />
           </div>
         </header>
-        <aside className="flex min-w-0 flex-col gap-7 border-b border-line bg-paper p-4 md:sticky md:top-0 md:col-start-1 md:row-span-2 md:row-start-1 md:h-svh md:overflow-y-auto md:border-r md:border-b-0">
+        <aside className="app-sidebar">
           <img
             src={sidebarLogo}
             alt="Organify"
             width={2172}
             height={724}
-            className="h-auto w-full max-w-48 object-contain"
+            className="h-auto w-36 object-contain md:mb-3 md:w-full md:max-w-53"
           />
           <div className="grid gap-2">
-            <h2 id="task-navigation-title" className="text-sm font-semibold">
-              Tareas
+            <h2 id="task-navigation-title" className="sidebar-label">
+              Espacio de trabajo
             </h2>
             <nav
               aria-labelledby="task-navigation-title"
-              className="flex min-w-0 flex-wrap gap-1 md:grid"
+              className="grid min-w-0 grid-cols-2 gap-1 md:grid-cols-1"
             >
               {inboxes.map(({ id, label }) => (
                 <button
                   type="button"
                   key={id}
                   aria-current={
-                    !projectId && (view === "calendar" ? "all" : inbox) === id
-                      ? "page"
-                      : undefined
+                    !projectId && activeInbox === id ? "page" : undefined
                   }
-                  className="nav-link w-full min-w-0"
+                  className="nav-link flex w-full min-w-0 items-center gap-2.5"
                   onClick={() => navigate(id)}
                 >
-                  {label}
+                  <InterfaceIcon
+                    name={inboxIcons[id]}
+                    className="size-4 shrink-0"
+                  />
+                  <span>{label}</span>
+                  {id === "today" && snapshot && (
+                    <span className="task-count ml-auto">
+                      {todayItems.length - doneToday}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
           </div>
           <div className="grid gap-2">
-            <h2 className="text-sm font-semibold">Proyectos</h2>
+            <h2 className="sidebar-label">Proyectos</h2>
             <nav
               aria-label="Proyectos"
               className="flex min-w-0 flex-wrap gap-1 md:grid"
@@ -525,210 +784,306 @@ export function App() {
                 aria-label="Crear proyecto"
                 disabled={!snapshot || creatingProject}
               >
-                +
+                <InterfaceIcon name="plus" />
               </Button>
             </form>
           </div>
-          <nav aria-label="Vistas guardadas" className="grid min-w-0 gap-1">
-            <h2 className="text-sm font-semibold">Vistas guardadas</h2>
-            {savedViews.map((saved) => (
-              <div className="flex min-w-0 items-center gap-1" key={saved.id}>
-                <button
-                  type="button"
-                  className="nav-link min-w-0 flex-1"
-                  onClick={() => openSavedView(saved)}
-                >
-                  {saved.name}
-                </button>
-                <button
-                  type="button"
-                  className="nav-link"
-                  aria-label={`Quitar vista ${saved.name}`}
-                  onClick={() =>
-                    void write(
-                      () => repositories.views.remove(saved.id),
-                      "Vista eliminada.",
-                    )
-                  }
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </nav>
           <div className="mt-auto">
             <ReleaseNotes />
           </div>
         </aside>
 
-        <main className="min-w-0 p-4 sm:p-6 md:col-start-2 md:row-start-2 md:pt-0 lg:px-8 lg:pb-8">
-          <form className="mb-4 flex gap-2" onSubmit={captureTask}>
-            <input
-              ref={capture}
-              className="field min-w-0 flex-1 bg-paper"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ejemplo: Reunión con Ana mañana a las 10:00"
-              aria-label="Captura rápida"
-              required
-            />
-            <Button type="submit" disabled={!snapshot || capturing}>
-              Añadir
-            </Button>
-          </form>
-
-          <div
-            className="mb-4 flex flex-wrap gap-2"
-            role="group"
-            aria-label="Presentación de tareas"
-          >
-            <button
-              type="button"
-              className="nav-link w-full min-w-0"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
+        <main className="app-content">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
+              {heading ?? "Tareas"}
+            </h1>
+            <time
+              className="date-card"
+              dateTime={localStamp(today).slice(0, 10)}
             >
-              Lista
-            </button>
-            <button
-              type="button"
-              className="nav-link w-full min-w-0"
-              aria-pressed={view === "board"}
-              onClick={() => setView("board")}
-            >
-              Tablero
-            </button>
-            <button
-              type="button"
-              className="nav-link"
-              aria-pressed={view === "calendar"}
-              onClick={() => setView("calendar")}
-            >
-              Calendario
-            </button>
+              <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
+                <InterfaceIcon name="calendar" />
+              </span>
+              {formatToday(today)}
+            </time>
           </div>
-
-          <div className="mb-4 flex flex-wrap gap-2">
-            <input
-              className="field min-w-0"
-              type="search"
-              placeholder="Buscar por título"
-              aria-label="Buscar por título"
-              value={taskSearch}
-              onChange={(event) => setTaskSearch(event.target.value)}
-            />
-            <select
-              className="field"
-              aria-label="Filtrar por estado"
-              value={statusFilter ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setStatusFilter(
-                  value === "todo" || value === "doing" || value === "done"
-                    ? value
-                    : undefined,
-                );
-              }}
-            >
-              <option value="">Todos los estados</option>
-              <option value="todo">Pendiente</option>
-              <option value="doing">En curso</option>
-              <option value="done">Hecha</option>
-            </select>
-            <form className="flex flex-wrap gap-2" onSubmit={saveCurrentView}>
+          {snapshot && isToday && (
+            <section className="focus-card" aria-labelledby="focus-title">
+              <div className="relative z-10">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
+                  <InterfaceIcon name="sparkles" />
+                  Enfoque diario
+                </span>
+                <h2
+                  id="focus-title"
+                  className="mt-2 text-2xl font-semibold tracking-tight"
+                >
+                  Tareas de hoy
+                </h2>
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-muted">
+                  <progress
+                    className="focus-progress"
+                    aria-label="Progreso de hoy"
+                    value={doneToday}
+                    max={todayItems.length || 1}
+                  />
+                  <span>
+                    {doneToday} de {todayItems.length} completadas
+                  </span>
+                </div>
+              </div>
+              <div className="focus-art" aria-hidden="true">
+                <span className="focus-orbit" />
+                <span className="focus-orbit focus-orbit-outer" />
+                <span className="focus-symbol">
+                  <InterfaceIcon name="check" className="size-8" />
+                </span>
+                <InterfaceIcon
+                  name="sparkles"
+                  className="absolute top-8 left-7 size-4 text-primary"
+                />
+                <InterfaceIcon
+                  name="sparkles"
+                  className="absolute right-4 bottom-8 size-5 text-primary"
+                />
+              </div>
+            </section>
+          )}
+          <section className="task-panel" aria-labelledby="task-panel-title">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h2 id="task-panel-title" className="font-semibold">
+                  {isToday ? "Tareas de hoy" : "Tareas"}
+                </h2>
+                {snapshot && (
+                  <span
+                    className="task-count"
+                    aria-label={`${openCount} tareas sin completar`}
+                  >
+                    {openCount}
+                  </span>
+                )}
+              </div>
+              <details className="relative">
+                <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
+                  <InterfaceIcon name="filter" />
+                  Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
+                </summary>
+                <div className="action-popover p-2">
+                  <select
+                    className="field"
+                    aria-label="Filtrar por estado"
+                    value={statusFilter ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setStatusFilter(
+                        value === "todo" ||
+                          value === "doing" ||
+                          value === "done"
+                          ? value
+                          : undefined,
+                      );
+                      closeDisclosure(event.currentTarget);
+                    }}
+                  >
+                    <option value="">Todos los estados</option>
+                    <option value="todo">Pendiente</option>
+                    <option value="doing">En curso</option>
+                    <option value="done">Hecha</option>
+                  </select>
+                </div>
+              </details>
+            </div>
+            <form className="quick-add" onSubmit={captureTask}>
+              <InterfaceIcon name="plus" className="size-5 shrink-0" />
               <input
-                className="field min-w-0"
-                placeholder="Nombre de la vista"
-                aria-label="Nombre de la vista"
-                value={viewName}
-                onChange={(event) => setViewName(event.target.value)}
+                ref={capture}
+                className="min-w-0 flex-1 text-sm text-foreground outline-none placeholder:text-muted"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ejemplo: Reunión con Ana mañana a las 10:00"
+                aria-label="Captura rápida"
                 required
               />
-              <Button type="submit">Guardar vista</Button>
+              <Button
+                className="h-8 px-2.5 text-xs"
+                type="submit"
+                disabled={!snapshot || capturing}
+              >
+                Añadir
+              </Button>
             </form>
-          </div>
-          {!selected && feedback}
-          {readError && (
-            <p role="alert" className="text-sm text-danger">
-              No se pudieron leer las tareas guardadas en este navegador.
-            </p>
-          )}
-          {!snapshot && !readError && (
-            <p className="text-sm text-muted">Cargando tareas…</p>
-          )}
 
-          <div className="min-w-0">
-            {snapshot && view === "calendar" && (
-              <CalendarView
-                items={visible}
-                projects={projectById}
-                open={openTask}
-                reschedule={(id, changes) =>
-                  write(
-                    () => repositories.items.update(id, changes),
-                    "Tarea reprogramada.",
-                  )
-                }
-              />
+            <div className="my-3 flex flex-wrap items-center justify-between gap-2">
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Presentación de tareas"
+              >
+                {layouts.map(({ id, label, icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="nav-link flex items-center gap-1.5 px-2.5 text-xs"
+                    aria-pressed={layout === id}
+                    onClick={() => setLayout(id)}
+                  >
+                    <InterfaceIcon name={icon} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="search-field">
+                <InterfaceIcon name="search" />
+                <input
+                  className="w-28 min-w-0 text-foreground outline-none placeholder:text-muted"
+                  type="search"
+                  placeholder="Buscar por título"
+                  aria-label="Buscar por título"
+                  value={taskSearch}
+                  onChange={(event) => setTaskSearch(event.target.value)}
+                />
+              </label>
+            </div>
+            {!selected && feedback}
+            {readError && (
+              <p role="alert" className="text-sm text-danger">
+                No se pudieron leer las tareas guardadas en este navegador.
+              </p>
             )}
-            {snapshot && view === "board" && (
-              <Board
-                items={visible}
-                projects={projectById}
-                now={now}
-                open={openTask}
-                move={move}
-              />
+            {!snapshot && !readError && (
+              <p className="text-sm text-muted">Cargando tareas…</p>
             )}
-            {snapshot &&
-              view === "list" &&
-              (visible.length ? (
-                <ul className="divide-y divide-line rounded-xl border border-line bg-paper">
-                  {visible.map((item) => {
-                    const project = item.projectId
-                      ? projectById.get(item.projectId)
-                      : undefined;
-                    return (
-                      <li
-                        key={item.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-                        style={
-                          project?.color
-                            ? { boxShadow: `inset 3px 0 ${project.color}` }
-                            : undefined
-                        }
-                      >
-                        <div className="min-w-0 flex-1">
+
+            <div className="min-w-0">
+              {snapshot && layout === "board" && (
+                <Board
+                  items={visible}
+                  projects={projectById}
+                  now={now}
+                  open={openTask}
+                  move={move}
+                />
+              )}
+              {snapshot && layout === "calendar" && (
+                <CalendarView
+                  items={visible}
+                  projects={projectById}
+                  open={openTask}
+                  reschedule={(id, changes) =>
+                    write(
+                      () => repositories.items.update(id, changes),
+                      "Tarea reprogramada.",
+                    )
+                  }
+                />
+              )}
+              {snapshot &&
+                layout === "list" &&
+                (visible.length ? (
+                  <ul>
+                    {visible.map((item) => {
+                      const project = item.projectId
+                        ? projectById.get(item.projectId)
+                        : undefined;
+                      const done = item.status === "done";
+                      const date = dateLabel(item);
+                      return (
+                        <li key={item.id} className="task-row">
                           <button
                             type="button"
-                            className="break-words text-left font-medium hover:underline"
+                            aria-label={`Completar tarea: ${item.title}`}
+                            aria-pressed={done}
+                            className="task-check"
+                            onClick={() =>
+                              move(item.id, done ? "todo" : "done")
+                            }
+                          >
+                            {done && (
+                              <InterfaceIcon
+                                name="check"
+                                className="size-3.5"
+                              />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
                             onClick={() => openTask(item.id)}
                           >
-                            {item.title}
+                            <span
+                              className={`block text-sm font-semibold wrap-anywhere ${done ? "text-muted line-through" : ""}`}
+                            >
+                              {item.title}
+                            </span>
+                            {project && (
+                              <span className="project-tag">
+                                <span
+                                  aria-hidden="true"
+                                  className="project-dot"
+                                  style={{ backgroundColor: project.color }}
+                                />
+                                {project.name}
+                              </span>
+                            )}
                           </button>
-                          <p className="text-sm text-muted empty:hidden">
-                            {[dateLabel(item), project?.name]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <TaskStatusIcon item={item} now={now} />
-                          <StatusSelect
-                            value={item.status}
-                            onChange={(status) => move(item.id, status)}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="rounded-xl border border-line bg-paper p-4 text-sm text-muted">
-                  No hay tareas en esta vista.
-                </p>
-              ))}
-          </div>
+                          {date && (
+                            <span className="text-xs text-muted">{date}</span>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <TaskStatusIcon item={item} now={now} />
+                            <StatusSelect
+                              value={item.status}
+                              onChange={(status) => move(item.id, status)}
+                            />
+                          </div>
+                          <details className="relative" name="task-actions">
+                            <summary
+                              className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
+                              aria-label={`Opciones de ${item.title}`}
+                            >
+                              <InterfaceIcon
+                                name="more"
+                                className="size-5 text-black [stroke-width:3]"
+                              />
+                            </summary>
+                            <div className="action-popover p-1">
+                              <button
+                                type="button"
+                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                onClick={(event) => {
+                                  closeDisclosure(event.currentTarget);
+                                  openTask(item.id, true);
+                                }}
+                              >
+                                <InterfaceIcon name="edit" />
+                                Editar tarea
+                              </button>
+                              <button
+                                type="button"
+                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
+                                onClick={(event) => {
+                                  closeDisclosure(event.currentTarget);
+                                  void removeTask(item);
+                                }}
+                              >
+                                <InterfaceIcon name="trash" />
+                                Eliminar tarea
+                              </button>
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="border-t border-line p-6 text-center text-sm text-muted">
+                    No hay tareas en esta vista.
+                  </p>
+                ))}
+            </div>
+          </section>
         </main>
       </div>
 
@@ -737,31 +1092,29 @@ export function App() {
           key={selected.id}
           item={selected}
           projects={projects}
+          startEditing={startEditing}
           feedback={feedback}
-          saveProperty={(name, value) =>
-            write(
-              () => repositories.items.setProperty(selected.id, name, value),
-              "Propiedad actualizada.",
-            )
-          }
           save={(changes) =>
             write(
               () => repositories.items.update(selected.id, changes),
               "Tarea guardada.",
             )
           }
-          remove={() => {
-            if (!window.confirm(`¿Eliminar «${selected.title}»?`)) return;
-            void write(async () => {
-              await cancelReminder(selected.id);
-              await repositories.items.remove(selected.id);
-            }, "Tarea eliminada.").then((removed) => {
-              if (removed)
-                setSelectedId((id) => (id === selected.id ? undefined : id));
-            });
-          }}
+          remove={() => void removeTask(selected)}
           close={() => setSelectedId(undefined)}
         />
+      )}
+
+      {reminderAlert && (
+        <div className="fixed right-4 bottom-4 z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
+          <InterfaceIcon name="bell" className="size-4 shrink-0 text-primary" />
+          <p role="status" className="text-sm wrap-anywhere">
+            {reminderTitle
+              ? `Recordatorio: ${reminderTitle}`
+              : "Tienes una tarea pendiente."}
+          </p>
+          <CloseDialogButton onClick={() => setReminderAlert(undefined)} />
+        </div>
       )}
 
       <dialog

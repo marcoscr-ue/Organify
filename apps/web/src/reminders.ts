@@ -3,7 +3,14 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 
 declare global {
   interface Window {
-    __TAURI__?: { core: { invoke: (command: string) => Promise<unknown> } };
+    __TAURI__?: {
+      core: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>,
+        ) => Promise<unknown>;
+      };
+    };
   }
 }
 
@@ -89,7 +96,7 @@ export async function cancelReminder(taskId: string) {
   writeReminder(taskId);
 }
 
-async function deliverDueReminders() {
+async function deliverDueReminders(onDelivered: (taskId: string) => void) {
   for (const [taskId, reminder] of Object.entries(readReminders())) {
     if (reminder.at > Date.now()) continue;
     if (window.__TAURI__) {
@@ -105,16 +112,22 @@ async function deliverDueReminders() {
       }
     }
     if (readReminders()[taskId]?.at === reminder.at) writeReminder(taskId);
+    onDelivered(taskId);
   }
 }
 
-export function watchReminders() {
+export function watchReminders(onDelivered: (taskId: string) => void) {
   if (isAndroid) return;
+  let active = true;
   let running = false;
   function tick() {
     if (running) return;
     running = true;
-    const run = () => deliverDueReminders();
+    const run = () =>
+      deliverDueReminders((taskId) => {
+        if (active && document.visibilityState === "visible")
+          onDelivered(taskId);
+      });
     const delivery = navigator.locks
       ? navigator.locks.request("organify-reminders", run)
       : run();
@@ -131,6 +144,7 @@ export function watchReminders() {
   const timer = window.setInterval(tick, 5_000);
   window.addEventListener("focus", tick);
   return () => {
+    active = false;
     window.clearInterval(timer);
     window.removeEventListener("focus", tick);
   };

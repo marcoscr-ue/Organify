@@ -52,12 +52,12 @@ const columnCoordinates: KeyboardCoordinateGetter = (
 
 function Card({
   item,
-  color,
+  project,
   now,
   open,
 }: {
   item: Item;
-  color?: string;
+  project?: Project;
   now: number;
   open: (id: Id) => void;
 }) {
@@ -73,21 +73,32 @@ function Card({
   return (
     <li
       ref={setNodeRef}
-      className={`relative flex items-start justify-between gap-2 rounded-lg border border-line bg-paper p-3 shadow-xs ${isDragging ? "z-10" : ""}`}
+      className={`relative flex flex-wrap items-start gap-2 rounded-lg border border-line bg-paper p-3 shadow-xs ${isDragging ? "z-10" : ""}`}
       style={{
         transform: transform
           ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
           : undefined,
-        borderInlineStart: color ? `3px solid ${color}` : undefined,
       }}
     >
-      <button
-        type="button"
-        className="min-w-0 flex-1 break-words text-left font-medium hover:underline"
-        onClick={() => open(item.id)}
-      >
-        {item.title}
-      </button>
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          className="block w-full wrap-anywhere text-left text-sm font-semibold hover:underline"
+          onClick={() => open(item.id)}
+        >
+          {item.title}
+        </button>
+        {project && (
+          <span className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+            <span
+              aria-hidden="true"
+              className="project-dot"
+              style={{ backgroundColor: project.color }}
+            />
+            <span className="min-w-0 wrap-anywhere">{project.name}</span>
+          </span>
+        )}
+      </div>
       <TaskStatusIcon item={item} now={now} />
       <button
         type="button"
@@ -120,11 +131,11 @@ function Column({
   return (
     <section
       ref={setNodeRef}
-      className={`min-h-56 min-w-56 flex-1 rounded-xl border p-3 ${isOver ? "border-primary bg-tint" : "border-line bg-panel"}`}
+      className={`min-h-44 min-w-48 flex-1 rounded-lg border p-2.5 ${isOver ? "border-primary bg-tint" : "border-line bg-panel"}`}
     >
-      <h2 className="mb-4 flex justify-between gap-2 font-semibold">
+      <h2 className="mb-2 flex items-center justify-between gap-2 px-1 text-xs font-semibold text-muted">
         {statusLabels[status]}
-        <span className="font-normal text-muted">{items.length}</span>
+        <span className="task-count">{items.length}</span>
       </h2>
       <ul className="grid gap-2">
         {items.map((item) => (
@@ -132,13 +143,14 @@ function Column({
             key={item.id}
             item={item}
             now={now}
-            color={
-              item.projectId ? projects.get(item.projectId)?.color : undefined
-            }
+            project={item.projectId ? projects.get(item.projectId) : undefined}
             open={open}
           />
         ))}
       </ul>
+      {!items.length && (
+        <p className="px-1 py-2 text-xs text-muted">Sin tareas</p>
+      )}
     </section>
   );
 }

@@ -15,6 +15,8 @@ La versión visible de la app (por ejemplo, 0.4.0) identifica la publicación. E
 
 La comprobación se activa en compilaciones de producción que incluyan la configuración `plugins.updater`. Al arrancar, Tauri consulta el manifiesto, verifica la firma del instalador y lo instala si hay una versión más reciente. Windows cierra la aplicación durante la instalación. Si la comprobación falla, se puede seguir usando la app.
 
+Cuando el instalador NSIS se ejecuta desde el actualizador, registra la versión instalada. Al arrancar esa versión, Organify muestra sus notas de lanzamiento y borra el aviso al cerrar la ventana. El historial completo sigue disponible en el botón de versión.
+
 1. Genera una pareja de claves con `corepack pnpm --filter @organify/desktop exec tauri signer generate -w <ruta-fuera-del-repositorio>`. Guarda una copia segura de la clave privada. Las instalaciones existentes confían en la clave pública incluida en su compilación.
 2. Configura las variables del repositorio `TAURI_UPDATER_PUBLIC_KEY` (contenido de la clave pública) y `TAURI_UPDATER_ENDPOINT` (URL HTTPS del manifiesto). Para un repositorio público puedes usar `https://github.com/OWNER/REPO/releases/latest/download/latest.json`. Si el repositorio es privado, sirve el manifiesto y el instalador firmado desde un endpoint accesible para los clientes y ajusta la URL del instalador en el manifiesto que publiques.
 3. Guarda el contenido de la clave privada en el secreto `TAURI_SIGNING_PRIVATE_KEY` y su contraseña en `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Configura las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` para que la compilación distribuida incluya la sincronización.

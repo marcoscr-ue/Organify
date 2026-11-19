@@ -234,6 +234,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 ## 11. Decisiones tomadas / pendientes
 
 **Tomadas**
+- En la 0.6.0 se retiraron de la interfaz las vistas guardadas y la edición de propiedades personalizadas. Se conservan los datos existentes y el protocolo de sincronización.
 - Nombre: **Organify**. Scope de paquetes sugerido: `@organify/*` (core, storage, sync, crypto, ui).
 - TypeScript + React + Vite, web/PWA primero, Tauri (PC) y Capacitor (solo Android) después.
 - **FullCalendar** para el calendario (plugins MIT, detrás de `<CalendarView>`).
