@@ -108,6 +108,37 @@ En Android Studio, selecciona el teléfono o emulador y pulsa **Run**. Para crea
 
 La carpeta `apps/mobile/android` se genera localmente y no se incluye en Git. Conserva los cambios específicos de Android hechos desde Android Studio y repite `android:add` solo si necesitas regenerar por completo el proyecto nativo.
 
+### Publicar todos los artefactos en una release
+
+El workflow **Publicar Multiplataforma** prepara un borrador de GitHub Release con el instalador NSIS y los artefactos del actualizador de Windows. Después adjunta un ZIP de `apps/web/dist` y compila un APK de release firmado, que también añade al mismo borrador.
+
+Antes de ejecutar el workflow, añade estos secretos en **Settings → Secrets and variables → Actions**:
+
+- `ANDROID_KEYSTORE_BASE64`: contenido Base64 del archivo `.jks` o `.keystore`.
+- `ANDROID_KEYSTORE_PASSWORD`: contraseña del keystore.
+- `ANDROID_KEY_ALIAS`: alias de la clave.
+- `ANDROID_KEY_PASSWORD`: contraseña de la clave.
+
+Las dos contraseñas deben contener solo caracteres ASCII; puedes usar letras inglesas, números y símbolos ASCII. Deben ser las credenciales de la misma clave que utilizaste para firmar la APK que ya probaste.
+
+En PowerShell puedes convertir el keystore a Base64 para pegarlo como secreto:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\ruta-segura\organify-release.jks")) | Set-Clipboard
+```
+
+El workflow usa el número de versión de `apps/mobile/package.json` como `versionName` y deriva un `versionCode` creciente de la versión semántica. La compilación Android apunta el actualizador al manifiesto `android.json` de la última release publicada. Este manifiesto enlaza al APK firmado de su versión. Mantén la misma clave de firma en todas las versiones.
+
+Ejecuta **Actions → Publicar Multiplataforma → Run workflow** desde la rama que contiene la versión que quieres publicar. Cuando terminen los trabajos, abre el borrador, comprueba que aparecen el instalador de Windows, `latest.json`, `Organify-PWA.zip` y `Organify-android.apk`, y publica la release. La fuente ZIP/TAR que ofrece GitHub corresponde automáticamente al commit etiquetado.
+
+### Publicar una sola plataforma
+
+En Actions también están **Publicar Windows**, **Publicar Android** y **Publicar PWA**. Cada uno compila únicamente esa plataforma y adjunta sus archivos al borrador `v<versión>`. Puedes ejecutar varios para completar el mismo borrador desde el mismo commit. La publicación final sigue siendo manual. PWA genera un ZIP listo para alojar; el workflow no despliega el sitio.
+
+Para una corrección nueva, incrementa la versión global aunque solo distribuyas una plataforma. Mantén alineados los paquetes web, desktop y mobile, Tauri, Cargo y el historial como indica VERSIONADO.md. Los workflows rechazan una release ya publicada y una etiqueta que apunta a otro commit; no sustituyas archivos de una versión que los usuarios ya instalaron.
+
+**Límite de los actualizadores:** Windows y Android consultan `releases/latest/download`. Si la última release publicada contiene solo una plataforma, el actualizador de la otra no encontrará su manifiesto. Las apps siguen funcionando, pero no podrán descubrir esa actualización desde ese enlace. Para mantener disponibles ambos actualizadores, publica Windows y Android en la misma release. No marques una release parcial como la última si necesitas que el enlace `latest` siga apuntando a una release completa; comprueba la opción de GitHub antes de publicarla. Las prereleases tampoco se descubren mediante ese enlace.
+
 ## Qué reconstruir cuando cambia la app
 
 - **Código web, estilos o dependencias compartidas:** ejecuta las comprobaciones y recompila el destino que quieras usar. Para PWA, `corepack pnpm build` y vuelve a desplegar el contenido de `apps/web/dist`. Para Android, ejecuta `android:sync` y luego **Run** o genera un APK nuevo. Para Windows, ejecuta `desktop:build` de nuevo.

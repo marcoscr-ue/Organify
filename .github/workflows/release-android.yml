@@ -1,0 +1,14 @@
+name: Publicar Android
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/release-multiplatform.yml
+    with:
+      platform: android
+    secrets: inherit

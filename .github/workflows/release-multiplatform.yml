@@ -1,0 +1,204 @@
+name: Publicar Multiplataforma
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      platform:
+        description: Plataforma que se compila (all, windows, android o pwa)
+        type: string
+        default: all
+
+permissions:
+  contents: write
+
+# Todos los puntos de entrada comparten este bloqueo para evitar adjuntos en conflicto.
+concurrency:
+  group: organify-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Comprobar versiones
+        id: version
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          if (!['', 'all', 'windows', 'android', 'pwa'].includes(process.env.PLATFORM)) throw new Error('Plataforma desconocida');
+          const paths = ['apps/web/package.json', 'apps/desktop/package.json', 'apps/mobile/package.json', 'apps/desktop/src-tauri/tauri.conf.json'];
+          const versions = paths.map(path => JSON.parse(readFileSync(path, 'utf8')).version);
+          if (new Set(versions).size !== 1 || !/^\d+\.\d+\.\d+$/.test(versions[0])) throw new Error('Las versiones deben coincidir y usar major.minor.patch');
+          appendFileSync(process.env.GITHUB_OUTPUT, `value=${versions[0]}\n`);
+          JS
+      - name: Preparar borrador de release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          if gh release view "v$VERSION" --json isDraft,targetCommitish > release-state.json; then
+            node -e "const r = require('./release-state.json'); if (!r.isDraft) throw new Error('Esta version ya esta publicada. Incrementa la version para una nueva publicacion.'); if (r.targetCommitish !== process.env.GITHUB_SHA) throw new Error('El borrador debe apuntar al mismo commit. Usa una version nueva o corrige el destino del borrador.')"
+          else
+            gh release create "v$VERSION" --draft --target "$GITHUB_SHA" --title "Organify v$VERSION"
+          fi
+          # Una etiqueta existente debe representar el mismo codigo que se compila.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            git fetch origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            test "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" || { echo 'La etiqueta pertenece a otro commit. Incrementa la version.' >&2; exit 1; }
+          fi
+
+  release-windows:
+    runs-on: windows-latest
+    needs: prepare
+    if: inputs.platform != 'android' && inputs.platform != 'pwa'
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Preparar configuración del actualizador
+        env:
+          UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+          UPDATER_ENDPOINT: ${{ vars.TAURI_UPDATER_ENDPOINT }}
+        run: |
+          if (-not $env:UPDATER_PUBLIC_KEY -or $env:UPDATER_ENDPOINT -notmatch '^https://') {
+            throw 'Configura TAURI_UPDATER_PUBLIC_KEY y TAURI_UPDATER_ENDPOINT antes de publicar.'
+          }
+          $configPath = Join-Path $env:RUNNER_TEMP 'organify-updater.json'
+          @{
+            bundle = @{ createUpdaterArtifacts = $true }
+            plugins = @{
+              updater = @{
+                pubkey = $env:UPDATER_PUBLIC_KEY
+                endpoints = @($env:UPDATER_ENDPOINT)
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding utf8
+          "ORGANIFY_UPDATER_CONFIG=$configPath" >> $env:GITHUB_ENV
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm exec tauri
+          args: --config "${{ env.ORGANIFY_UPDATER_CONFIG }}"
+          tagName: v__VERSION__
+          releaseName: Organify v__VERSION__
+          releaseDraft: true
+          includeUpdaterJson: true
+  release-android:
+    needs: prepare
+    if: inputs.platform != 'windows' && inputs.platform != 'pwa'
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      ORGANIFY_ANDROID_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/latest/download/android.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Validar secretos de firma Android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo 'Falta ANDROID_KEYSTORE_BASE64.' >&2; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo 'Falta ANDROID_KEYSTORE_PASSWORD.' >&2; exit 1; }
+          test -n "$KEY_ALIAS" || { echo 'Falta ANDROID_KEY_ALIAS.' >&2; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo 'Falta ANDROID_KEY_PASSWORD.' >&2; exit 1; }
+          python3 - <<'PY'
+          import os, sys
+          for name in ("KEYSTORE_PASSWORD", "KEY_PASSWORD"):
+              if not os.environ[name].isascii():
+                  print(f"{name} debe contener solo caracteres ASCII.", file=sys.stderr)
+                  sys.exit(1)
+          PY
+      - name: Crear proyecto Android y sincronizar la app
+        run: |
+          corepack pnpm --filter @organify/mobile android:add
+          corepack pnpm --filter @organify/mobile android:sync
+      - name: Configurar versión y firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/organify-release.jks"
+          node apps/mobile/configure-release.mjs "$RUNNER_TEMP/organify-release.jks"
+      - name: Compilar APK firmado
+        working-directory: apps/mobile/android
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Adjuntar APK firmado a la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./apps/mobile/package.json').version")
+          fi
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk Organify-android.apk
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          const { version } = JSON.parse(await (await import('node:fs/promises')).readFile('apps/mobile/package.json', 'utf8'));
+          const [major, minor, patch] = version.split('.').map(Number);
+          writeFileSync('android.json', JSON.stringify({
+            applicationId: 'app.organify.personal',
+            versionCode: major * 1000000 + minor * 1000 + patch,
+            apkUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/Organify-android.apk`
+          }, null, 2));
+          JS
+          gh release upload "v$VERSION" Organify-android.apk android.json --clobber
+
+  release-pwa:
+    needs: prepare
+    if: inputs.platform != 'windows' && inputs.platform != 'android'
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: corepack pnpm --filter @organify/web build
+      - name: Empaquetar PWA
+        working-directory: apps/web/dist
+        run: zip -r ../../../Organify-PWA.zip .
+      - name: Adjuntar PWA a la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: gh release upload "v$VERSION" Organify-PWA.zip --clobber
