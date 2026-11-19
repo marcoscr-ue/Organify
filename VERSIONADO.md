@@ -4,6 +4,7 @@ La versión visible de la app (por ejemplo, 0.4.0) identifica la publicación. E
 
 ## Cambios de sincronización
 
+- La 0.5.1 conserva el protocolo 1 y envía su cabecera solo en las RPC de sincronización. Comparte servidor e historial cifrado con la 0.5.0 y requiere las mismas migraciones de Supabase.
 - La 0.5.0 conserva el protocolo 1. El nombre y el color de proyecto usan operaciones de campo independientes. Los clientes anteriores conservan el color en la réplica y pueden seguir sincronizando tareas. Al actualizar a la 0.5.0, Dexie recupera los colores ya recibidos.
 - La 0.4.0 anuncia el protocolo 1 desde `packages/sync/src/supabase.ts`. Los clientes anteriores que omiten la cabecera también se tratan como protocolo 1. Supabase aplica el rango admitido al conectar y en cada llamada a las RPC de envío y descarga.
 - Antes de cambiar el protocolo, revisa las operaciones pendientes, las operaciones cifradas del historial, el formato de las claves y las migraciones de IndexedDB. Comprueba qué pasa si dispositivos antiguos y nuevos trabajan sin conexión y vuelven en distinto orden. La cabecera describe el cliente y no convierte los datos cifrados. Una versión nueva debe poder leer el historial previo o incluir una estrategia explícita para migrarlo.
