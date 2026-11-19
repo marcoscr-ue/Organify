@@ -1,6 +1,6 @@
 {
   "name": "@organify/mobile",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "scripts": {
     "android:add": "cap add android && node android-icon.mjs && node android-updater.mjs",

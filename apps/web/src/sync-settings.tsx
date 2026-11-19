@@ -14,15 +14,48 @@ import {
 } from "@organify/sync";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
+import {
+  protocolMessage,
+  readSyncProject,
+  syncConnectionMessage,
+  type SyncProject,
+} from "./sync-connection";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const publicKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const client = url && publicKey ? createSyncClient(url, publicKey) : undefined;
+const projectStorageKey = "organify:sync-project";
 
-const protocolMessage =
-  "Esta versión no es compatible con la sincronización. Actualiza Organify e inténtalo de nuevo. Puedes seguir trabajando en local.";
+function clientFor(project: SyncProject) {
+  return createSyncClient(project.url, project.publicKey);
+}
+
+function readInstalledClient() {
+  try {
+    return clientFor(
+      readSyncProject(
+        import.meta.env.VITE_SUPABASE_URL ?? "",
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+      ),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function readSavedClient() {
+  try {
+    const project: SyncProject = JSON.parse(
+      localStorage.getItem(projectStorageKey) ?? "null",
+    );
+    return clientFor(readSyncProject(project.url, project.publicKey));
+  } catch {
+    return undefined;
+  }
+}
+
+const installedClient = readInstalledClient();
+const initialClient = installedClient ?? readSavedClient();
 
 export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
+  const [client, setClient] = useState(initialClient);
   const [connection, setConnection] = useState<{
     email: string;
     stop: () => void;
@@ -33,9 +66,48 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   useEffect(() => connection?.stop, [connection]);
   if (!client) {
     return (
-      <p className="text-sm text-muted">
-        La sincronización no está configurada en esta instalación.
-      </p>
+      <form
+        className="grid min-w-0 gap-2 text-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          try {
+            const project = readSyncProject(
+              String(data.get("url")),
+              String(data.get("publicKey")),
+            );
+            setClient(clientFor(project));
+            setMessage("");
+            try {
+              localStorage.setItem(projectStorageKey, JSON.stringify(project));
+            } catch {
+              setMessage(
+                "La configuración se conservará hasta que cierres o recargues la app.",
+              );
+            }
+          } catch (error) {
+            setMessage(syncConnectionMessage(error));
+          }
+        }}
+      >
+        <h3 className="font-semibold">Configurar Supabase</h3>
+        <label className="grid gap-1">
+          URL del proyecto
+          <input className="field min-w-0" name="url" type="url" required />
+        </label>
+        <label className="grid gap-1">
+          Clave pública del proyecto
+          <input
+            className="field min-w-0"
+            name="publicKey"
+            autoComplete="off"
+            placeholder="sb_publishable_…"
+            required
+          />
+        </label>
+        <Button type="submit">Guardar configuración</Button>
+        {message && <p role="status">{message}</p>}
+      </form>
     );
   }
   const api = client;
@@ -122,13 +194,7 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
       setConnection({ email: login.user.email ?? email, stop: pause });
       form.reset();
     } catch (error) {
-      setMessage(
-        isSyncProtocolError(error)
-          ? protocolMessage
-          : error instanceof Error
-            ? error.message
-            : "No se pudo iniciar la sincronización. Comprueba la conexión y la configuración del servidor.",
-      );
+      setMessage(syncConnectionMessage(error));
     } finally {
       setBusy(false);
     }
@@ -208,6 +274,20 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
             {busy ? "Conectando…" : "Conectar"}
           </Button>
         </form>
+      )}
+      {!installedClient && !connection && (
+        <Button
+          className="mt-2 bg-transparent text-foreground hover:bg-panel"
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            void api.auth.signOut({ scope: "local" });
+            setClient(undefined);
+            setMessage("");
+          }}
+        >
+          Cambiar configuración de Supabase
+        </Button>
       )}
       {message && (
         <p role="status" className="mt-2 break-words">

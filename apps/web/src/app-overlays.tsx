@@ -5,6 +5,14 @@ import { SyncSettings } from "./sync-settings";
 
 const releases = [
   {
+    version: "0.5.1",
+    date: "2026-11-19",
+    changes: [
+      "Configura Supabase desde Cuenta si la instalación no trae un proyecto configurado.",
+      "El inicio de sesión usa las cabeceras estándar de Supabase. Los mensajes distinguen errores de red, cuenta y configuración del servidor.",
+    ],
+  },
+  {
     version: "0.5.0",
     date: "2026-11-16",
     changes: [

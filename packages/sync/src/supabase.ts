@@ -6,12 +6,15 @@ export const SYNC_PROTOCOL = 1;
 export function createSyncClient(url: string, publicKey: string) {
   return createClient(url, publicKey, {
     auth: { persistSession: false },
-    global: { headers: { "x-organify-sync-protocol": String(SYNC_PROTOCOL) } },
   });
 }
 
+const protocolHeader = "x-organify-sync-protocol";
+
 export async function checkSyncProtocol(client: SupabaseClient) {
-  const { error } = await client.rpc("organify_check_sync_protocol");
+  const { error } = await client
+    .rpc("organify_check_sync_protocol")
+    .setHeader(protocolHeader, String(SYNC_PROTOCOL));
   if (error) throw error;
 }
 
@@ -30,18 +33,19 @@ export function supabaseAdapter(
 ): SyncAdapter {
   return {
     async push(changes) {
-      const { error } = await client.rpc("organify_push", {
-        batch: changes,
-        expected_user: userId,
-      });
+      const { error } = await client
+        .rpc("organify_push", { batch: changes, expected_user: userId })
+        .setHeader(protocolHeader, String(SYNC_PROTOCOL));
       if (error) throw error;
     },
     async pull(cursor, limit) {
-      const { data, error } = await client.rpc("organify_pull", {
-        after_cursor: cursor,
-        page_size: limit,
-        expected_user: userId,
-      });
+      const { data, error } = await client
+        .rpc("organify_pull", {
+          after_cursor: cursor,
+          page_size: limit,
+          expected_user: userId,
+        })
+        .setHeader(protocolHeader, String(SYNC_PROTOCOL));
       if (error) throw error;
       return data as Entry[];
     },
