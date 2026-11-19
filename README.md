@@ -34,7 +34,9 @@ Abre la URL que muestra Vite, normalmente `http://localhost:5173`. Para detener 
 
 ### Variables para sincronización opcional
 
-La app funciona sin una cuenta de Supabase. Para probar sincronización, copia `apps/web/.env.example` a `apps/web/.env.local`, rellena la URL del proyecto y su clave pública, y reinicia Vite. Configura la base de datos según la sección **Fase 3**. No uses la clave `service_role` en la app.
+La app funciona sin una cuenta de Supabase. Para incluir un proyecto en la compilación, copia `apps/web/.env.example` a `apps/web/.env.local` y rellena la URL y la clave pública. Reinicia Vite en desarrollo o vuelve a compilar para desplegar en web, Windows o Android. En un alojamiento web que compile el repositorio, define `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` en el entorno de compilación.
+
+Si la instalación no incluye un proyecto, abre **Cuenta → Configurar Supabase** e introduce la URL base del proyecto y su clave pública `sb_publishable_…` o `anon`. Usa **Cambiar configuración de Supabase** si necesitas corregir esos datos. El correo y la contraseña se introducen después en el formulario de acceso. Configura la base de datos según la sección **Fase 3**. Reserva `sb_secret_…` y `service_role` para el servidor.
 
 ## Comprobar cambios
 
@@ -134,7 +136,7 @@ Prueba programando una tarea semanal, moviendo una ocurrencia y recargando. Revi
 
 ## Fase 3 · Sincronización cifrada
 
-En un proyecto Supabase de pruebas, aplica la migración de `supabase/migrations` desde **SQL Editor**. En **Authentication → Users**, crea un usuario con correo y contraseña. Define `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` en `apps/web/.env.local`, y reinicia Vite. Usa la clave pública del proyecto.
+En un proyecto Supabase de pruebas, aplica las migraciones de `supabase/migrations` desde **SQL Editor**, primero `202611150001_sync.sql` y luego `202611160001_sync_protocol.sql`. Si el proyecto ya tenía sincronización, aplica solo las migraciones pendientes. En **Authentication → Users**, crea un usuario con correo y contraseña y configura la conexión desde **Cuenta** o mediante las variables descritas arriba.
 
 En **Sincronización**, conecta el primer dispositivo con una frase de cifrado distinta de la contraseña de acceso y de al menos 12 caracteres. Marca **Configurar el primer dispositivo** y guarda la clave de recuperación. En un segundo perfil de navegador, inicia sesión con la misma cuenta y desbloquea con la frase o la clave. Tras recargar, vuelve a desbloquear para activar la sincronización.
 
