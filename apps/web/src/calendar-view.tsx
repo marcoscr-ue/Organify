@@ -77,7 +77,7 @@ export function CalendarView({
   return (
     <section
       aria-label="Calendario de tareas"
-      className="organify-calendar min-w-0"
+      className="organify-calendar min-w-0 overflow-x-auto rounded-lg border border-line p-2 sm:p-3"
     >
       <FullCalendar
         plugins={plugins}

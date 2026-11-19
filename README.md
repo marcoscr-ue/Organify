@@ -122,17 +122,12 @@ No hace falta regenerar el proyecto Android ni reinstalar Rust por cada cambio. 
 
 1. Crea un proyecto y captura «Reunión con Ana mañana a las 10:00». Comprueba que el título queda en «Reunión con Ana» y la fecha aparece en **Próximas**. Crea «Comprar pan» y comprueba **Sin fecha**.
 2. Abre la tarea, edita el título o las notas y guarda. Puedes cambiar el proyecto desde el detalle.
-3. Cambia a **Tablero** y arrastra el asa de una tarjeta a otra columna. También puedes enfocar el asa, pulsar **Espacio**, usar las flechas y pulsar **Espacio** de nuevo. Vuelve a **Lista** y comprueba el estado.
-4. Abre la paleta con **Ctrl+K**. Escribe «tablero» y pulsa Enter. Recarga la página desde el mismo origen y comprueba que se conservan los proyectos, las notas y los estados.
-5. Elimina una tarea, confirma y recarga. Debe desaparecer de ambas vistas.
+3. Cambia el estado en la lista o marca la tarea como completada con el círculo.
+4. Abre la paleta con **Ctrl+K** y escribe «Ir a Todas». Recarga y comprueba que se conservan los proyectos, las notas y los estados.
+5. Elimina una tarea, confirma y recarga. Debe desaparecer de la lista.
+6. Cambia a **Tablero** y arrastra una tarjeta a otra columna. Abre **Calendario** para ver las tareas con fecha y arrástralas para reprogramarlas.
 
 Los datos se guardan en IndexedDB del navegador. Dexie queda encapsulado en `@organify/storage`. Los repositorios usan UUIDv7, claves de orden de `fractional-indexing` y borrado lógico.
-
-## Fase 2 · Calendario
-
-Abre **Calendario** desde las vistas o la paleta. Cambia entre mes, semana y agenda. Selecciona un proyecto para filtrar sus tareas. En el detalle elige fecha y hora opcional. Puedes repetir a diario, semanalmente o mensualmente. Arrastra una tarea en mes o semana para reprogramarla. Las ocurrencias de una serie comparten título, notas y estado.
-
-Prueba programando una tarea semanal, moviendo una ocurrencia y recargando. Revisa que el horario y la serie se conserven.
 
 ## Fase 3 · Sincronización cifrada
 
@@ -152,24 +147,18 @@ Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique
 
 ### Probar recordatorios
 
-Abre el detalle de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Programar**. Concede el permiso si se solicita. El aviso usa un texto genérico para no mostrar el título en la pantalla bloqueada. Prueba **Cancelar recordatorio** antes de la hora. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo, separados de la fecha y repetición del calendario.
+Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo.
 
-## Fase 5 · Notas en bloques, propiedades y vistas guardadas
+## Fase 5 · Descripción en bloques
 
 Después de actualizar `dev`, ejecuta `corepack pnpm install` y guarda el
 `pnpm-lock.yaml` actualizado junto al código. Para probarlo, arranca con
 `corepack pnpm dev`.
 
-- Abre una tarea y escribe en **Nota en bloques**. Prueba títulos, listas,
+- Abre una tarea, pulsa **Editar tarea** y escribe en **Descripción**. Prueba títulos, listas,
   citas y bloques de código. Espera a que aparezca **Guardado en este
   dispositivo** antes de cerrar. El texto de la versión anterior se puede
   consultar en **Nota de texto anterior** y copiar al editor.
-- Añade una propiedad de texto, número o sí/no. Puedes editarla o quitarla
-  desde el detalle. Las propiedades se sincronizan por nombre.
-- Elige un proyecto, una bandeja, un estado y un formato de vista. Si
-  quieres, escribe parte del título para filtrar. Ponle nombre a la vista
-  y pulsa **Guardar vista**. Tras recargar, ábrela desde la barra lateral
-  o la paleta de comandos. Las vistas se guardan en cada dispositivo.
 
 Para probar la edición concurrente, actualiza ambos clientes a la Fase 5
 y conéctalos a la misma cuenta. Crea una nota con dos párrafos y espera a
