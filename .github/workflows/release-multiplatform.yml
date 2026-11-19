@@ -56,16 +56,6 @@ jobs:
             git fetch origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
             test "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" || { echo 'La etiqueta pertenece a otro commit. Incrementa la version.' >&2; exit 1; }
           fi
-      - name: Adjuntar código fuente
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          archive="Organify-v${VERSION}-source"
-          git archive --format=zip --prefix="Organify-v$VERSION/" --output="$archive.zip" "$GITHUB_SHA"
-          git archive --format=tar.gz --prefix="Organify-v$VERSION/" --output="$archive.tar.gz" "$GITHUB_SHA"
-          gh release upload "v$VERSION" "$archive.zip" "$archive.tar.gz" --clobber
-
   release-windows:
     runs-on: windows-latest
     needs: prepare
@@ -180,7 +170,8 @@ jobs:
           if [ -z "$VERSION" ]; then
             VERSION=$(node -p "require('./apps/mobile/package.json').version")
           fi
-          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk Organify-android.apk
+          APK_NAME="Organify-android-v${VERSION}.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
           node --input-type=module <<'JS'
           import { writeFileSync } from 'node:fs';
           const { version } = JSON.parse(await (await import('node:fs/promises')).readFile('apps/mobile/package.json', 'utf8'));
@@ -188,10 +179,10 @@ jobs:
           writeFileSync('android.json', JSON.stringify({
             applicationId: 'app.organify.personal',
             versionCode: major * 1000000 + minor * 1000 + patch,
-            apkUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/Organify-android.apk`
+            apkUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/Organify-android-v${version}.apk`
           }, null, 2));
           JS
-          gh release upload "v$VERSION" Organify-android.apk android.json --clobber
+          gh release upload "v$VERSION" "$APK_NAME" android.json --clobber
 
   release-pwa:
     needs: prepare
@@ -211,9 +202,11 @@ jobs:
       - run: corepack pnpm --filter @organify/web build
       - name: Empaquetar PWA
         working-directory: apps/web/dist
-        run: zip -r ../../../Organify-PWA.zip .
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: zip -r "../../../Organify-PWA-v${VERSION}.zip" .
       - name: Adjuntar PWA a la release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: gh release upload "v$VERSION" Organify-PWA.zip --clobber
+        run: gh release upload "v$VERSION" "Organify-PWA-v$VERSION.zip" --clobber

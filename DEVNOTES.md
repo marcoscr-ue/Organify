@@ -129,7 +129,7 @@ En PowerShell puedes convertir el keystore a Base64 para pegarlo como secreto:
 
 El workflow usa el número de versión de `apps/mobile/package.json` como `versionName` y deriva un `versionCode` creciente de la versión semántica. La compilación Android apunta el actualizador al manifiesto `android.json` de la última release publicada. Este manifiesto enlaza al APK firmado de su versión. Mantén la misma clave de firma en todas las versiones.
 
-Ejecuta **Actions → Publicar Multiplataforma → Run workflow** desde la rama que contiene la versión que quieres publicar. Cuando terminen los trabajos, abre el borrador, comprueba que aparecen el instalador de Windows, `latest.json`, `Organify-PWA.zip` y `Organify-android.apk`, y publica la release. El borrador incluye los adjuntos `Organify-v<versión>-source.zip` y `Organify-v<versión>-source.tar.gz`, generados con los archivos de Git del mismo commit. Al publicar la release, GitHub también ofrece sus enlaces automáticos al código de la etiqueta.
+Ejecuta **Actions → Publicar Multiplataforma → Run workflow** desde la rama que contiene la versión que quieres publicar. Cuando terminen los trabajos, abre el borrador, comprueba que aparecen el instalador de Windows, `latest.json`, `Organify-PWA-v<versión>.zip` y `Organify-android-v<versión>.apk`, y publica la release. GitHub añade automáticamente los enlaces **Source code (zip)** y **Source code (tar.gz)** al publicar la release.
 
 ### Publicar una sola plataforma
 
