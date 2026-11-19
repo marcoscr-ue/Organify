@@ -1,7 +1,33 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
+
+#[tauri::command]
+fn pending_release_notes(app: tauri::AppHandle, dismiss: bool) -> Result<bool, String> {
+    let path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("pending-release-notes");
+    let installed_version = match std::fs::read_to_string(&path) {
+        Ok(version) => version,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.to_string()),
+    };
+    if installed_version.trim() != app.package_info().version.to_string() {
+        return Ok(false);
+    }
+    if dismiss {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(true)
+}
 
 async fn install_update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     let updater = app
@@ -40,7 +66,10 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![show_reminder])
+        .invoke_handler(tauri::generate_handler![
+            show_reminder,
+            pending_release_notes
+        ])
         .run(tauri::generate_context!())
         .expect("No se pudo iniciar Organify");
 }

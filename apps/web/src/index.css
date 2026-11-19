@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: oklch(0.975 0.008 255);
-  --foreground: oklch(0.25 0.03 255);
-  --primary: oklch(0.45 0.15 257);
-  --primary-foreground: oklch(0.985 0 0);
-  --radius: 0.625rem;
+  --background: #f7f7fa;
+  --foreground: #19192a;
+  --primary: #7047eb;
+  --primary-foreground: #fff;
+  --radius: 0.75rem;
 }
 
 @theme inline {
@@ -13,31 +13,194 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-paper: oklch(1 0 0);
-  --color-panel: oklch(0.953 0.013 255);
-  --color-line: oklch(0.885 0.02 255);
-  --color-muted: oklch(0.47 0.03 255);
-  --color-tint: oklch(0.92 0.045 257);
-  --color-danger: oklch(0.49 0.17 25);
+  --color-paper: #fff;
+  --color-panel: #f7f5fb;
+  --color-line: #ecebf2;
+  --color-control-line: #dcd8e7;
+  --color-muted: #706c7e;
+  --color-tint: #f1edfc;
+  --color-accent-ink: #5e3fbe;
+  --color-danger: #b53349;
   --radius-md: calc(var(--radius) - 2px);
 }
 
 body {
   @apply bg-background text-foreground;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-.field {
-  @apply rounded-md border border-line px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary;
+button:enabled,
+summary {
+  cursor: pointer;
 }
 
-.nav-link {
-  @apply rounded-md px-3 py-2 text-left text-sm break-words hover:bg-panel focus-visible:outline-2 focus-visible:outline-primary aria-current:bg-tint aria-pressed:bg-tint;
+dialog::backdrop {
+  backdrop-filter: blur(3px);
+}
+
+@layer components {
+  .field {
+    @apply max-w-full rounded-md border border-control-line bg-paper px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary;
+  }
+
+  .nav-link {
+    @apply rounded-md px-3 py-2 text-left text-sm break-words text-muted hover:bg-panel hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary aria-current:bg-tint aria-current:font-semibold aria-current:text-accent-ink aria-pressed:bg-tint aria-pressed:font-semibold aria-pressed:text-accent-ink;
+  }
+
+  .app-sidebar {
+    @apply flex min-w-0 flex-col gap-6 border-b border-line bg-paper p-4;
+  }
+
+  .sidebar-label {
+    @apply px-2 text-[0.65rem] font-bold tracking-[0.11em] text-muted uppercase;
+  }
+
+  .app-topbar {
+    @apply flex min-w-0 items-center justify-between gap-2 border-b border-line px-4 py-3 sm:px-6 lg:px-[42px];
+    background: #fafafd;
+  }
+
+  .topbar-button {
+    @apply inline-flex h-9 items-center justify-center rounded-lg border border-line bg-paper text-xs text-muted hover:border-primary/40 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
+
+  .topbar-account {
+    @apply border-primary/15 bg-tint text-accent-ink;
+  }
+
+  .shortcut-key {
+    @apply rounded border border-line bg-background px-1 py-0.5 font-sans text-[0.65rem] text-muted;
+  }
+
+  .app-content {
+    @apply mx-auto w-full max-w-[1080px] min-w-0 px-4 py-6 sm:px-6 lg:px-[42px] lg:py-9;
+  }
+
+  @media (min-width: 48rem) {
+    .app-shell {
+      display: grid;
+      grid-template-columns: 13rem minmax(0, 1fr);
+      grid-template-rows: 73px 1fr;
+      min-height: 100svh;
+    }
+
+    .app-sidebar {
+      @apply sticky top-0 col-start-1 row-span-2 row-start-1 h-svh overflow-y-auto border-r border-b-0 pt-6;
+    }
+
+    .app-topbar {
+      @apply col-start-2 row-start-1;
+    }
+
+    .app-content {
+      @apply col-start-2 row-start-2;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .app-shell {
+      grid-template-columns: 244px minmax(0, 1fr);
+    }
+  }
+
+  .date-card {
+    @apply inline-flex items-center gap-2 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-semibold text-muted;
+  }
+
+  .focus-card {
+    @apply relative mb-7 flex min-h-40 items-center overflow-hidden rounded-xl border px-5 py-6 sm:px-6;
+    border-color: #e8e0fb;
+    background: linear-gradient(105deg, #f2eefc, #f9f7ff 59%, #f4f0fc);
+  }
+
+  .focus-progress {
+    @apply h-1.5 w-28 sm:w-32;
+    accent-color: var(--primary);
+  }
+
+  .focus-art {
+    @apply pointer-events-none absolute top-1/2 -right-20 size-48 -translate-y-1/2 opacity-35 sm:right-4 sm:opacity-100 lg:right-16;
+  }
+
+  .focus-orbit {
+    @apply absolute inset-x-4 top-11 h-24 -rotate-24 rounded-[50%] border border-primary/20;
+  }
+
+  .focus-orbit-outer {
+    @apply inset-x-0 top-8 h-32 rotate-38;
+  }
+
+  .focus-symbol {
+    @apply absolute top-1/2 left-1/2 grid size-13 -translate-1/2 -rotate-8 place-items-center rounded-2xl bg-linear-to-br from-[#a890f2] to-[#7350e2] text-white shadow-lg shadow-primary/25;
+  }
+
+  .task-panel {
+    @apply rounded-xl border border-line bg-paper px-3 py-4 sm:p-5;
+  }
+
+  .task-count,
+  .project-tag {
+    @apply inline-flex items-center gap-1.5 rounded-md bg-tint px-2 py-0.5 text-xs text-accent-ink;
+  }
+
+  .project-dot {
+    @apply size-2 shrink-0 rounded-full bg-primary;
+  }
+
+  .quick-add {
+    @apply flex min-h-11 items-center gap-2 rounded-lg border border-dashed border-control-line px-2 text-primary focus-within:border-solid focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10;
+  }
+
+  .search-field {
+    @apply inline-flex h-9 max-w-full items-center gap-1.5 rounded-md border border-control-line px-2 text-sm text-muted focus-within:outline-2 focus-within:outline-primary;
+  }
+
+  .task-row {
+    @apply flex min-h-16 flex-wrap items-center justify-between gap-2 border-t border-line py-2.5;
+  }
+
+  .task-check {
+    @apply grid size-5 shrink-0 place-items-center rounded-full border border-control-line text-white hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:border-primary aria-pressed:bg-primary;
+  }
+
+  .disclosure-trigger {
+    list-style: none;
+  }
+
+  .disclosure-trigger::-webkit-details-marker {
+    display: none;
+  }
+
+  .action-popover {
+    @apply absolute end-0 z-20 mt-1 min-w-max rounded-lg border border-line bg-paper shadow-lg;
+  }
+}
+
+.organify-calendar {
+  --fc-border-color: var(--color-line);
+  --fc-button-bg-color: var(--color-panel);
+  --fc-button-border-color: var(--color-control-line);
+  --fc-button-text-color: var(--color-accent-ink);
+  --fc-button-hover-bg-color: var(--color-tint);
+  --fc-button-hover-border-color: var(--primary);
+  --fc-button-active-bg-color: var(--color-tint);
+  --fc-button-active-border-color: var(--primary);
+  --fc-today-bg-color: #f7f3ff;
+  --fc-event-bg-color: #eee9fb;
+  --fc-event-border-color: #aa91ed;
+  --fc-event-text-color: #4e358d;
 }
 
 .organify-calendar .fc-header-toolbar {
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  @apply flex-wrap gap-2 text-xs;
+}
+
+.organify-calendar .fc-toolbar-title {
+  @apply text-base font-semibold;
+}
+
+.organify-calendar .fc-view-harness {
+  min-width: 24rem;
 }
 
 .block-note {

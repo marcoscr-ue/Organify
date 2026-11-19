@@ -11,10 +11,12 @@ export function BlockNotes({
   id,
   legacy,
   documents,
+  editable = true,
 }: {
   id: string;
   legacy: string;
   documents: TaskRepositories["documents"];
+  editable?: boolean;
 }) {
   const [session, setSession] = useState<{ doc: Y.Doc; retry: () => void }>();
   const [status, setStatus] = useState("");
@@ -69,17 +71,30 @@ export function BlockNotes({
 
   return (
     <section className="mt-4 grid gap-2">
-      <h3 className="text-sm font-semibold">Nota enriquecida</h3>
-      {legacy && (
-        <details className="text-sm">
-          <summary>Nota de texto anterior</summary>
-          <p className="whitespace-pre-wrap break-words">{legacy}</p>
-        </details>
+      {editable && <h3 className="text-sm font-semibold">Descripción</h3>}
+      {legacy &&
+        (editable ? (
+          <details className="text-sm">
+            <summary>Nota de texto anterior</summary>
+            <p className="whitespace-pre-wrap wrap-anywhere">{legacy}</p>
+          </details>
+        ) : (
+          <p className="whitespace-pre-wrap wrap-anywhere text-sm">{legacy}</p>
+        ))}
+      {session ? (
+        <Editor
+          doc={session.doc}
+          editable={editable}
+          hasLegacy={Boolean(legacy)}
+        />
+      ) : (
+        !status && <p className="text-sm text-muted">Cargando nota.</p>
       )}
-      {session && <Editor doc={session.doc} />}
-      <p role="status" className="text-sm text-muted">
-        {status}
-      </p>
+      {(editable || status.startsWith("No se")) && (
+        <p role="status" className="text-sm text-muted empty:hidden">
+          {status}
+        </p>
+      )}
       {status.startsWith("No se guardaron") && (
         <button type="button" className="nav-link" onClick={session?.retry}>
           Reintentar guardado
@@ -89,9 +104,18 @@ export function BlockNotes({
   );
 }
 
-function Editor({ doc }: { doc: Y.Doc }) {
+function Editor({
+  doc,
+  editable,
+  hasLegacy,
+}: {
+  doc: Y.Doc;
+  editable: boolean;
+  hasLegacy: boolean;
+}) {
   const editor = useEditor(
     {
+      editable,
       extensions: [
         StarterKit.configure({ undoRedo: false }),
         Collaboration.configure({ document: doc }),
@@ -100,16 +124,20 @@ function Editor({ doc }: { doc: Y.Doc }) {
         attributes: {
           class:
             "block-note min-h-32 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-          "aria-label": "Nota enriquecida",
+          "aria-label": "Descripción",
         },
       },
     },
     [doc],
   );
+  useEffect(() => {
+    editor?.setEditable(editable, false);
+  }, [editor, editable]);
   const state = useEditorState({
     editor,
     selector: ({ editor }) => ({
       undo: editor?.can().undo() ?? false,
+      empty: editor?.isEmpty ?? true,
       redo: editor?.can().redo() ?? false,
       paragraph: editor?.isActive("paragraph") ?? false,
       heading: editor?.isActive("heading", { level: 2 }) ?? false,
@@ -185,39 +213,49 @@ function Editor({ doc }: { doc: Y.Doc }) {
     },
   ];
   return (
-    <div className="rounded-lg border border-line bg-paper">
-      <div
-        className="flex flex-wrap gap-1 rounded-t-lg border-b border-line bg-background p-1.5"
-        role="group"
-        aria-label="Formato de la nota"
-      >
-        {actions.map(({ label, path, pressed, disabled, run }) => (
-          <button
-            key={label}
-            type="button"
-            title={label}
-            aria-label={label}
-            aria-pressed={pressed}
-            disabled={disabled}
-            className="inline-flex size-9 items-center justify-center rounded-md hover:bg-panel focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 disabled:hover:bg-transparent aria-pressed:bg-tint aria-pressed:text-primary"
-            onClick={run}
-          >
-            <svg
-              aria-hidden="true"
-              className="size-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+    <div
+      hidden={!editable && state?.empty && hasLegacy}
+      className="rounded-lg border border-line bg-paper"
+    >
+      {editable && (
+        <div
+          className="flex flex-wrap gap-1 rounded-t-lg border-b border-line bg-background p-1.5"
+          role="group"
+          aria-label="Formato de la nota"
+        >
+          {actions.map(({ label, path, pressed, disabled, run }) => (
+            <button
+              key={label}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-pressed={pressed}
+              disabled={disabled}
+              className="inline-flex size-9 items-center justify-center rounded-md hover:bg-panel focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40 disabled:hover:bg-transparent aria-pressed:bg-tint aria-pressed:text-primary"
+              onClick={run}
             >
-              <path d={path} />
-            </svg>
-          </button>
-        ))}
+              <svg
+                aria-hidden="true"
+                className="size-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d={path} />
+              </svg>
+            </button>
+          ))}
+        </div>
+      )}
+      <div hidden={!editable && state?.empty}>
+        <EditorContent editor={editor} />
       </div>
-      <EditorContent editor={editor} />
+      {!editable && state?.empty && (
+        <p className="p-3 text-sm text-muted">Sin descripción.</p>
+      )}
     </div>
   );
 }
