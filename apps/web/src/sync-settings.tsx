@@ -1,35 +1,26 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { isSyncProtocolError, type SyncEngine } from "@organify/sync";
 import {
-  createKeyEnvelope,
-  createOpCodec,
-  unlockKey,
-  type KeyEnvelope,
-} from "@organify/crypto";
-import {
-  checkSyncProtocol,
-  createSyncClient,
-  isSyncProtocolError,
-  supabaseAdapter,
-  SyncEngine,
-} from "@organify/sync";
-import type { TaskRepositories } from "@organify/storage";
+  createDeviceUnlockStore,
+  type TaskRepositories,
+} from "@organify/storage";
 import { Button } from "@/components/ui/button";
+import { canRememberUnlock, protectDeviceUnlock } from "./device-unlock";
 import {
+  createAccountClient,
   protocolMessage,
   readSyncProject,
+  resumeSync,
   syncConnectionMessage,
+  unlockSync,
   type SyncProject,
 } from "./sync-connection";
 
 const projectStorageKey = "organify:sync-project";
 
-function clientFor(project: SyncProject) {
-  return createSyncClient(project.url, project.publicKey);
-}
-
 function readInstalledClient() {
   try {
-    return clientFor(
+    return createAccountClient(
       readSyncProject(
         import.meta.env.VITE_SUPABASE_URL ?? "",
         import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
@@ -45,7 +36,7 @@ function readSavedClient() {
     const project: SyncProject = JSON.parse(
       localStorage.getItem(projectStorageKey) ?? "null",
     );
-    return clientFor(readSyncProject(project.url, project.publicKey));
+    return createAccountClient(readSyncProject(project.url, project.publicKey));
   } catch {
     return undefined;
   }
@@ -53,43 +44,135 @@ function readSavedClient() {
 
 const installedClient = readInstalledClient();
 const initialClient = installedClient ?? readSavedClient();
+const deviceUnlockStore = canRememberUnlock()
+  ? createDeviceUnlockStore()
+  : undefined;
 
-export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
+export type SyncStatus = "inactive" | "pending" | "synced" | "error";
+
+export function SyncSettings({
+  store,
+  status,
+  onStatus,
+}: {
+  store: TaskRepositories["sync"];
+  status: SyncStatus;
+  onStatus: (status: SyncStatus) => void;
+}) {
   const [client, setClient] = useState(initialClient);
-  const [connection, setConnection] = useState<{
+  const [account, setAccount] = useState<{
     email: string;
-    stop: () => void;
+    rememberSession: boolean;
   }>();
+  const [rememberLogin, setRememberLogin] = useState(false);
+  const [rememberedUnlock, setRememberedUnlock] = useState(false);
+  const [retryRestore, setRetryRestore] = useState(false);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [stopSync, setStopSync] = useState<() => void>();
+  const [restoring, setRestoring] = useState(Boolean(initialClient));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [recovery, setRecovery] = useState("");
-  useEffect(() => connection?.stop, [connection]);
+
+  const startSync = useCallback(
+    (engine: SyncEngine) => {
+      const stop = engine.start(
+        (error) => {
+          onStatus("error");
+          if (isSyncProtocolError(error)) {
+            stop();
+            setStopSync(undefined);
+            setMessage(protocolMessage);
+          }
+        },
+        () => onStatus("synced"),
+      );
+      setStopSync(() => stop);
+    },
+    [onStatus],
+  );
+
+  useEffect(() => stopSync, [stopSync]);
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    void client.api.auth
+      .getSession()
+      .then(async ({ data, error }) => {
+        if (!active) return;
+        if (error) throw error;
+        if (!data.session) {
+          setAccount(undefined);
+          setRememberedUnlock(false);
+          return;
+        }
+        const user = data.session.user;
+        setAccount({ email: user.email ?? "", rememberSession: true });
+        const saved = await deviceUnlockStore?.read(client.projectUrl);
+        if (!active) return;
+        setRememberedUnlock(saved?.userId === user.id);
+        if (saved?.userId !== user.id) return;
+        onStatus("pending");
+        const engine = await resumeSync(client.api, store, saved);
+        if (active) startSync(engine);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setMessage(syncConnectionMessage(error));
+        setRetryRestore(true);
+        onStatus("error");
+      })
+      .finally(() => {
+        if (active) setRestoring(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, onStatus, restoreAttempt, startSync, store]);
+
+  const restoreAgain = useCallback(() => {
+    setMessage("");
+    setRetryRestore(false);
+    setRestoring(true);
+    onStatus("inactive");
+    setRestoreAttempt((attempt) => attempt + 1);
+  }, [onStatus]);
+
+  useEffect(() => {
+    if (!retryRestore || busy) return;
+    window.addEventListener("online", restoreAgain);
+    return () => window.removeEventListener("online", restoreAgain);
+  }, [busy, restoreAgain, retryRestore]);
+
+  function saveProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const project = readSyncProject(
+        String(data.get("url")),
+        String(data.get("publicKey")),
+      );
+      setClient(createAccountClient(project));
+      setRestoring(true);
+      setMessage("");
+      onStatus("inactive");
+      try {
+        localStorage.setItem(projectStorageKey, JSON.stringify(project));
+      } catch {
+        onStatus("error");
+        setMessage(
+          "La configuración se conservará hasta que cierres o recargues la app.",
+        );
+      }
+    } catch (error) {
+      onStatus("error");
+      setMessage(syncConnectionMessage(error));
+    }
+  }
+
   if (!client) {
     return (
-      <form
-        className="grid min-w-0 gap-2 text-sm"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          try {
-            const project = readSyncProject(
-              String(data.get("url")),
-              String(data.get("publicKey")),
-            );
-            setClient(clientFor(project));
-            setMessage("");
-            try {
-              localStorage.setItem(projectStorageKey, JSON.stringify(project));
-            } catch {
-              setMessage(
-                "La configuración se conservará hasta que cierres o recargues la app.",
-              );
-            }
-          } catch (error) {
-            setMessage(syncConnectionMessage(error));
-          }
-        }}
-      >
+      <form className="grid min-w-0 gap-2 text-sm" onSubmit={saveProject}>
         <h3 className="font-semibold">Configurar Supabase</h3>
         <label className="grid gap-1">
           URL del proyecto
@@ -110,23 +193,27 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
       </form>
     );
   }
-  const api = client;
+  const { api, projectUrl, setRememberSession } = client;
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || restoring) return;
     const form = event.currentTarget;
     const data = new FormData(form);
-    const email = String(data.get("email"));
-    const password = String(data.get("password"));
+    const email = String(data.get("email") ?? "");
+    const password = String(data.get("password") ?? "");
     const secret = String(data.get("secret"));
     const method =
       data.get("method") === "recovery" ? "recovery" : "passphrase";
     const initialize = data.get("initialize") === "on";
+    const rememberSession = account?.rememberSession ?? rememberLogin;
+    const rememberUnlock =
+      rememberSession && data.get("rememberUnlock") === "on";
     if (
       method === "passphrase" &&
       (password === secret || secret.trim().length < 12)
     ) {
+      onStatus("error");
       setMessage(
         "Usa una frase de cifrado distinta de la contraseña y de al menos 12 caracteres.",
       );
@@ -135,65 +222,115 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
 
     setBusy(true);
     setMessage("");
+    setRetryRestore(false);
+    onStatus("pending");
     try {
-      const { data: login, error: loginError } =
-        await api.auth.signInWithPassword({ email, password });
-      if (loginError) throw loginError;
-      await checkSyncProtocol(api);
-      const userId = login.user.id;
-      const { data: existing, error } = await api
-        .from("key_envelopes")
-        .select("envelope")
-        .eq("user_id", userId)
-        .maybeSingle();
+      if (!account) setRememberSession(rememberSession);
+      const { data: login, error } = account
+        ? await api.auth.getUser()
+        : await api.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      let key: Uint8Array;
-      if (existing) {
-        key = await unlockKey(
-          userId,
-          existing.envelope as KeyEnvelope,
-          secret,
-          method,
-        );
-        await store.bind(userId);
-      } else {
-        if (!initialize || method === "recovery") {
-          setMessage(
-            "Esta cuenta aún no tiene clave. Marca la opción de primer dispositivo para crearla.",
-          );
-          return;
-        }
-        await store.bind(userId);
-        const created = await createKeyEnvelope(userId, secret);
-        const { error: saveError } = await api
-          .from("key_envelopes")
-          .insert({ user_id: userId, envelope: created.envelope });
-        if (saveError) throw saveError;
-        key = created.key;
-        setRecovery(created.recoveryKey);
-      }
-
-      const engine = new SyncEngine(
+      const userId = login.user.id;
+      setAccount({ email: login.user.email ?? email, rememberSession });
+      const { engine, recoveryKey, key, envelopeId } = await unlockSync(
+        api,
         store,
-        supabaseAdapter(api, userId),
-        createOpCodec(userId, key),
+        userId,
+        secret,
+        method,
+        initialize,
       );
-      const pause = engine.start((error) => {
-        if (isSyncProtocolError(error)) {
-          pause();
-          setConnection(undefined);
-          setMessage(protocolMessage);
-          void api.auth.signOut({ scope: "local" });
-          return;
+      if (recoveryKey) setRecovery(recoveryKey);
+      if (deviceUnlockStore) {
+        try {
+          if (rememberUnlock) {
+            const saved = await protectDeviceUnlock(
+              { projectUrl, userId, envelopeId },
+              key,
+            );
+            await deviceUnlockStore.save(saved);
+          } else {
+            await deviceUnlockStore.forget(projectUrl);
+          }
+          setRememberedUnlock(rememberUnlock);
+        } catch {
+          if (rememberUnlock || rememberedUnlock) {
+            setMessage(
+              rememberUnlock
+                ? "No se pudo recordar el desbloqueo en este dispositivo."
+                : "No se pudo borrar el desbloqueo guardado en este dispositivo.",
+            );
+          }
         }
-        setMessage(
-          "Sincronización interrumpida. Se volverá a intentar automáticamente.",
-        );
-      });
-      setConnection({ email: login.user.email ?? email, stop: pause });
+      }
+      startSync(engine);
       form.reset();
     } catch (error) {
+      onStatus("error");
+      setMessage(syncConnectionMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function forgetUnlock() {
+    setBusy(true);
+    try {
+      await deviceUnlockStore?.forget(projectUrl);
+      setRememberedUnlock(false);
+      setRetryRestore(false);
+      if (!stopSync) onStatus("inactive");
+      setMessage("El desbloqueo guardado se ha borrado.");
+    } catch {
+      setMessage(
+        "No se pudo borrar el desbloqueo guardado en este dispositivo.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    stopSync?.();
+    setStopSync(undefined);
+    setRecovery("");
+    setMessage("");
+    setBusy(true);
+    setRetryRestore(false);
+    onStatus("inactive");
+    try {
+      try {
+        await deviceUnlockStore?.forget(projectUrl);
+        setRememberedUnlock(false);
+      } finally {
+        await api.auth.signOut({ scope: "local" });
+        setAccount(undefined);
+        setRememberLogin(false);
+      }
+      setMessage("Sesión cerrada. Sincronización pausada.");
+    } catch (error) {
+      onStatus("error");
+      setMessage(syncConnectionMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeProject() {
+    setBusy(true);
+    try {
+      try {
+        await deviceUnlockStore?.forget(projectUrl);
+      } finally {
+        await api.auth.signOut({ scope: "local" });
+        await api.auth.dispose();
+        setClient(undefined);
+        setRetryRestore(false);
+        setMessage("");
+        onStatus("inactive");
+      }
+    } catch (error) {
+      onStatus("error");
       setMessage(syncConnectionMessage(error));
     } finally {
       setBusy(false);
@@ -203,48 +340,70 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
   return (
     <section aria-label="Sincronización" className="min-w-0 text-sm">
       <h3 className="font-semibold">Sincronización</h3>
-      {connection ? (
-        <>
-          <p className="mt-2 break-words text-muted">
-            Sincronizando datos asociados a la cuenta de correo{" "}
-            <strong>{connection.email}</strong>.
-          </p>
-          <Button
-            type="button"
-            className="mt-2"
-            onClick={() => {
-              connection.stop();
-              setConnection(undefined);
-              setRecovery("");
-              setMessage("Sincronización pausada.");
-              void api.auth.signOut({ scope: "local" });
-            }}
-          >
-            Desconectar
-          </Button>
-        </>
+      {account && (
+        <p className="mt-2 break-words text-muted">
+          {account.email ? (
+            <>
+              Sesión iniciada como <strong>{account.email}</strong>.
+            </>
+          ) : (
+            "Sesión iniciada."
+          )}
+        </p>
+      )}
+      {restoring ? (
+        <p role="status" className="mt-2 text-muted">
+          Comprobando la sesión…
+        </p>
+      ) : stopSync ? (
+        <p role="status" className="mt-2 text-muted">
+          {status === "error"
+            ? "Sincronización interrumpida. Se volverá a intentar automáticamente."
+            : status === "synced"
+              ? "Sincronización al día."
+              : "Conectando con la sincronización…"}
+        </p>
       ) : (
         <form onSubmit={connect} className="mt-2 grid min-w-0 gap-2">
-          <label className="grid gap-1">
-            Correo
-            <input
-              className="field min-w-0"
-              name="email"
-              type="email"
-              autoComplete="username"
-              required
-            />
-          </label>
-          <label className="grid gap-1">
-            Contraseña de acceso
-            <input
-              className="field min-w-0"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
+          {account ? (
+            <p className="text-muted">
+              Desbloquea el cifrado para reanudar la sincronización.
+            </p>
+          ) : (
+            <>
+              <label className="grid gap-1">
+                Correo
+                <input
+                  className="field min-w-0"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  required
+                />
+              </label>
+              <label className="grid gap-1">
+                Contraseña de acceso
+                <input
+                  className="field min-w-0"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="remember"
+                  checked={rememberLogin}
+                  onChange={(event) =>
+                    setRememberLogin(event.currentTarget.checked)
+                  }
+                />
+                Mantener sesión iniciada
+              </label>
+            </>
+          )}
           <label className="grid gap-1">
             Método
             <select className="field" name="method">
@@ -262,29 +421,68 @@ export function SyncSettings({ store }: { store: TaskRepositories["sync"] }) {
               required
             />
           </label>
-          <label className="flex items-start gap-2">
+          <label className="flex items-center gap-2">
             <input type="checkbox" name="initialize" />
             Configurar el primer dispositivo
           </label>
+          {deviceUnlockStore && (account?.rememberSession ?? rememberLogin) && (
+            <div className="grid gap-1">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="rememberUnlock" />
+                Recordar el desbloqueo en este dispositivo
+              </label>
+              <p className="text-muted">
+                Actívalo solo en un perfil de confianza. Cualquiera que pueda
+                abrir Organify en este perfil podrá reanudar la sincronización.
+              </p>
+            </div>
+          )}
           <p className="text-muted">
             Guarda la frase y la clave de recuperación. Si pierdes ambas, no
             podrás recuperar tus datos cifrados.
           </p>
           <Button type="submit" disabled={busy}>
-            {busy ? "Conectando…" : "Conectar"}
+            {busy ? "Conectando…" : account ? "Desbloquear" : "Conectar"}
           </Button>
         </form>
       )}
-      {!installedClient && !connection && (
+      {retryRestore && !restoring && (
+        <Button
+          type="button"
+          className="mt-2"
+          disabled={busy}
+          onClick={restoreAgain}
+        >
+          Reintentar la restauración
+        </Button>
+      )}
+      {account && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          {rememberedUnlock && !restoring && (
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void forgetUnlock()}
+            >
+              Olvidar desbloqueo
+            </Button>
+          )}
+          <Button
+            type="button"
+            className={`bg-red-700 text-white hover:bg-red-800 ${stopSync ? "" : "w-full"}`}
+            disabled={busy || restoring}
+            onClick={() => void disconnect()}
+          >
+            {stopSync ? "Desconectar" : "Cerrar sesión"}
+          </Button>
+        </div>
+      )}
+      {!installedClient && !account && !restoring && (
         <Button
           className="mt-2 bg-transparent text-foreground hover:bg-panel"
           type="button"
           disabled={busy}
-          onClick={() => {
-            void api.auth.signOut({ scope: "local" });
-            setClient(undefined);
-            setMessage("");
-          }}
+          onClick={() => void changeProject()}
         >
           Cambiar configuración de Supabase
         </Button>

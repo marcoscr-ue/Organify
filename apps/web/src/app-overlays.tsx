@@ -3,12 +3,23 @@ import { Capacitor } from "@capacitor/core";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { version } from "../package.json";
-import { SyncSettings } from "./sync-settings";
+import { SyncSettings, type SyncStatus } from "./sync-settings";
 
 const updated = (text: string) => ({ text, label: "Actualizado" as const });
 const improved = (text: string) => ({ text, label: "Mejorado" as const });
 
 const releases = [
+  {
+    version: "0.7.0",
+    date: "2026-11-20",
+    changes: [
+      updated("Mantén la sesión iniciada en este dispositivo desde Cuenta."),
+      updated("Recuerda el desbloqueo del cifrado en un perfil de confianza."),
+      improved(
+        "Consulta el estado de la sincronización en el icono de Cuenta.",
+      ),
+    ],
+  },
   {
     version: "0.6.0",
     date: "2026-11-19",
@@ -148,6 +159,7 @@ export function CloseDialogButton({
 function AppDialog({
   title,
   label = title,
+  tooltip = title,
   trigger,
   triggerClass,
   wide = false,
@@ -155,6 +167,7 @@ function AppDialog({
 }: {
   title: string;
   label?: string;
+  tooltip?: string;
   trigger: ReactNode;
   triggerClass: string;
   wide?: boolean;
@@ -169,7 +182,7 @@ function AppDialog({
         className={triggerClass}
         aria-haspopup="dialog"
         aria-label={label}
-        title={title}
+        title={tooltip}
         onClick={() => dialog.current?.showModal()}
       >
         {trigger}
@@ -426,7 +439,45 @@ export function ReleaseNotes() {
   );
 }
 
+const syncStatusLabel: Record<SyncStatus, string> = {
+  inactive: "Sincronización inactiva",
+  pending: "Conectando con la sincronización",
+  synced: "Sincronización al día",
+  error: "Problema de sincronización",
+};
+
+function SyncBadge({ status }: { status: SyncStatus }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`absolute -bottom-1 -right-1 size-3.5 rounded-full ring-1 ring-paper ${
+        status === "synced"
+          ? "bg-emerald-700 text-white"
+          : status === "error"
+            ? "bg-red-700 text-white"
+            : "bg-paper text-muted"
+      }`}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {status === "synced" ? (
+        <path d="m4 8 2.5 2.5L12 5" />
+      ) : status === "error" ? (
+        <path d="M8 4.5v4m0 2.8h.01" />
+      ) : (
+        <path d="m3 3 10 10M7 4.5a9 9 0 0 1 7 2m-12 0 2-1.2M4 9a6 6 0 0 1 2.3-1.2m3.7 0L12 9m-6 2.4a3 3 0 0 1 3.5-.4M8 13h.01" />
+      )}
+    </svg>
+  );
+}
+
 export function AppControls({ store }: { store: TaskRepositories["sync"] }) {
+  const [status, setStatus] = useState<SyncStatus>("inactive");
+  const accountLabel = `Cuenta. ${syncStatusLabel[status]}`;
   return (
     <>
       <AppDialog
@@ -455,23 +506,28 @@ export function AppControls({ store }: { store: TaskRepositories["sync"] }) {
       </AppDialog>
       <AppDialog
         title="Cuenta"
+        label={accountLabel}
+        tooltip={accountLabel}
         triggerClass={`${iconButtonClass} topbar-account`}
         trigger={
-          <svg
-            aria-hidden="true"
-            className="size-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          >
-            <circle cx="12" cy="8" r="3.5" />
-            <path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
-          </svg>
+          <span className="relative inline-flex">
+            <svg
+              aria-hidden="true"
+              className="size-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+            >
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
+            </svg>
+            <SyncBadge status={status} />
+          </span>
         }
       >
-        <SyncSettings store={store} />
+        <SyncSettings store={store} status={status} onStatus={setStatus} />
       </AppDialog>
     </>
   );

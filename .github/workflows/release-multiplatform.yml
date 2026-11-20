@@ -23,10 +23,11 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
       - name: Comprobar versiones
         id: version
         env:
@@ -55,7 +56,6 @@ jobs:
             git fetch origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
             test "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" || { echo 'La etiqueta pertenece a otro commit. Incrementa la version.' >&2; exit 1; }
           fi
-
   release-windows:
     runs-on: windows-latest
     needs: prepare
@@ -64,10 +64,11 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
       - uses: dtolnay/rust-toolchain@stable
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
@@ -90,7 +91,7 @@ jobs:
             }
           } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding utf8
           "ORGANIFY_UPDATER_CONFIG=$configPath" >> $env:GITHUB_ENV
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -112,16 +113,19 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       ORGANIFY_ANDROID_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/latest/download/android.json
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - uses: actions/setup-java@v4
+          package-manager-cache: false
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - name: Preparar SDK de Android
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - name: Validar secretos de firma Android
@@ -166,7 +170,8 @@ jobs:
           if [ -z "$VERSION" ]; then
             VERSION=$(node -p "require('./apps/mobile/package.json').version")
           fi
-          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk Organify-android.apk
+          APK_NAME="Organify-android-v${VERSION}.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
           node --input-type=module <<'JS'
           import { writeFileSync } from 'node:fs';
           const { version } = JSON.parse(await (await import('node:fs/promises')).readFile('apps/mobile/package.json', 'utf8'));
@@ -174,10 +179,10 @@ jobs:
           writeFileSync('android.json', JSON.stringify({
             applicationId: 'app.organify.personal',
             versionCode: major * 1000000 + minor * 1000 + patch,
-            apkUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/Organify-android.apk`
+            apkUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/Organify-android-v${version}.apk`
           }, null, 2));
           JS
-          gh release upload "v$VERSION" Organify-android.apk android.json --clobber
+          gh release upload "v$VERSION" "$APK_NAME" android.json --clobber
 
   release-pwa:
     needs: prepare
@@ -187,18 +192,21 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: corepack pnpm --filter @organify/web build
       - name: Empaquetar PWA
         working-directory: apps/web/dist
-        run: zip -r ../../../Organify-PWA.zip .
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: zip -r "../../../Organify-PWA-v${VERSION}.zip" .
       - name: Adjuntar PWA a la release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: gh release upload "v$VERSION" Organify-PWA.zip --clobber
+        run: gh release upload "v$VERSION" "Organify-PWA-v$VERSION.zip" --clobber
