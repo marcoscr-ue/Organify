@@ -1,26 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
-declare global {
-  interface Window {
-    __TAURI__?: {
-      window?: {
-        getCurrentWindow: () => {
-          minimize: () => Promise<void>;
-          toggleMaximize: () => Promise<void>;
-          close: () => Promise<void>;
-        };
-      };
-      core: {
-        invoke: (
-          command: string,
-          args?: Record<string, unknown>,
-        ) => Promise<unknown>;
-      };
-    };
-  }
-}
-
 export const isAndroid = Capacitor.getPlatform() === "android";
 const storageKey = "organify.local-reminders.v1";
 const title = "Organify";
@@ -43,6 +23,11 @@ function writeReminder(taskId: string, value?: Reminder) {
   if (value) reminders[taskId] = value;
   else delete reminders[taskId];
   localStorage.setItem(storageKey, JSON.stringify(reminders));
+}
+
+async function withReminderLock(run: () => void | Promise<void>) {
+  if (navigator.locks) await navigator.locks.request("organify-reminders", run);
+  else await run();
 }
 
 export function reminderTime(taskId: string) {
@@ -92,7 +77,7 @@ export async function scheduleReminder(taskId: string, at: number) {
       throw new Error("Permite las notificaciones en el navegador.");
     }
   }
-  writeReminder(taskId, { at });
+  await withReminderLock(() => writeReminder(taskId, { at }));
 }
 
 export async function cancelReminder(taskId: string) {
@@ -100,7 +85,7 @@ export async function cancelReminder(taskId: string) {
   if (isAndroid && id !== undefined) {
     await LocalNotifications.cancel({ notifications: [{ id }] });
   }
-  writeReminder(taskId);
+  await withReminderLock(() => writeReminder(taskId));
 }
 
 async function deliverDueReminders(onDelivered: (taskId: string) => void) {
@@ -135,10 +120,7 @@ export function watchReminders(onDelivered: (taskId: string) => void) {
         if (active && document.visibilityState === "visible")
           onDelivered(taskId);
       });
-    const delivery = navigator.locks
-      ? navigator.locks.request("organify-reminders", run)
-      : run();
-    void delivery
+    void withReminderLock(run)
       .catch((error: unknown) =>
         console.error("No se pudo mostrar el recordatorio.", error),
       )

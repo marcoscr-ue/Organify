@@ -10,6 +10,14 @@ import type { Id, Item, ItemChanges, Project } from "@organify/core";
 import { localStamp, scheduleChanges, shiftSeries } from "./calendar-schedule";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin];
+const views = {
+  timeGridDay: "Día",
+  timeGridWeek: "Semana",
+  dayGridMonth: "Mes",
+  listWeek: "Agenda",
+};
+
+export type CalendarPosition = { view: string; date: string };
 
 function taskEvents(
   items: Item[],
@@ -68,11 +76,15 @@ export function CalendarView({
   projects,
   open,
   reschedule,
+  position,
+  onPositionChange,
 }: {
   items: Item[];
   projects: ReadonlyMap<Id, Project>;
   open: (id: Id) => void;
   reschedule: (id: Id, changes: ItemChanges) => Promise<boolean>;
+  position?: CalendarPosition;
+  onPositionChange?: (position: CalendarPosition) => void;
 }) {
   return (
     <section
@@ -83,12 +95,24 @@ export function CalendarView({
         plugins={plugins}
         locale={es}
         timeZone="local"
-        initialView="dayGridMonth"
+        initialView={
+          position && Object.hasOwn(views, position.view)
+            ? position.view
+            : "dayGridMonth"
+        }
+        initialDate={position?.date}
+        datesSet={({ view }) =>
+          onPositionChange?.({
+            view: view.type,
+            date: localStamp(view.calendar.getDate()).slice(0, 10),
+          })
+        }
         headerToolbar={{
           left: "prev,next today",
           center: "title",
-          right: "dayGridMonth,timeGridWeek,listWeek",
+          right: "timeGridDay,timeGridWeek,dayGridMonth,listWeek",
         }}
+        buttonText={views}
         height="auto"
         dayMaxEvents
         eventDisplay="block"
