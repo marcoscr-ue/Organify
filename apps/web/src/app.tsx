@@ -22,7 +22,12 @@ import { Button } from "@/components/ui/button";
 import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { Board } from "./board";
 import { CalendarView, type CalendarPosition } from "./calendar-view";
-import { AppControls, CloseDialogButton, ReleaseNotes } from "./app-overlays";
+import {
+  AppControls,
+  CloseDialogButton,
+  DeleteConfirmation,
+  ReleaseNotes,
+} from "./app-overlays";
 import { BlockNotes } from "./block-notes";
 import {
   DesktopWindowControls,
@@ -33,6 +38,7 @@ import {
 } from "./desktop-windows";
 import {
   cancelReminder,
+  cancelReminders,
   isAndroid,
   reminderTime,
   scheduleReminder,
@@ -53,6 +59,7 @@ import {
 } from "./task-controls";
 import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
+import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
 
 const repositories = createTaskRepositories();
 const inboxes: { id: Inbox; label: string }[] = [
@@ -530,7 +537,7 @@ function TaskDetail({
               </Button>
               <Button
                 type="button"
-                className="gap-1.5 bg-danger text-white hover:bg-danger/90"
+                className="gap-1.5 bg-danger-button text-white hover:bg-danger-button/90"
                 onClick={remove}
               >
                 <InterfaceIcon name="trash" />
@@ -547,6 +554,9 @@ function TaskDetail({
 export function App() {
   const [floating] = useState(readFloatingView);
   const [openingView, setOpeningView] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [darkMode, setDarkMode] = useState(readDarkMode);
+  const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
   const calendarPosition = useRef<CalendarPosition>(undefined);
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
   const [readError, setReadError] = useState(false);
@@ -580,6 +590,23 @@ export function App() {
     () => repositories.subscribe(setSnapshot, () => setReadError(true)),
     [],
   );
+
+  useEffect(() => {
+    function syncTheme(event: StorageEvent) {
+      if (event.key !== themeStorageKey && event.key !== null) return;
+      const dark = readDarkMode();
+      applyTheme(dark);
+      setDarkMode(dark);
+    }
+    window.addEventListener("storage", syncTheme);
+    return () => window.removeEventListener("storage", syncTheme);
+  }, []);
+
+  function changeTheme(dark: boolean) {
+    localStorage.setItem(themeStorageKey, dark ? "dark" : "light");
+    applyTheme(dark);
+    setDarkMode(dark);
+  }
 
   useEffect(() => {
     if (!floating) return watchReminders(setReminderAlert);
@@ -624,14 +651,25 @@ export function App() {
     setSelectedId(id);
   }
 
-  async function removeTask(item: Item) {
-    if (!window.confirm(`¿Eliminar «${item.title}»?`)) return;
-    const removed = await write(async () => {
-      await cancelReminder(item.id);
-      await repositories.items.remove(item.id);
-    }, "Tarea eliminada.");
-    if (removed && floating?.kind === "task") void closeFloatingTask();
-    else if (removed) setSelectedId((id) => (id === item.id ? undefined : id));
+  async function confirmDeletion(target: NonNullable<typeof deletion>) {
+    const ids = "item" in target ? [target.item.id] : target.ids;
+    await repositories.items.removeMany(ids);
+
+    setError("");
+    setNotice("item" in target ? "Tarea eliminada." : "Tareas eliminadas.");
+    let remindersCancelled = true;
+    try {
+      await cancelReminders(ids);
+    } catch {
+      remindersCancelled = false;
+      setError(
+        "Se completó el borrado, pero no se pudieron cancelar los recordatorios en este dispositivo.",
+      );
+    }
+    setSelectedId((id) => (id && ids.includes(id) ? undefined : id));
+    setDeletion(undefined);
+    if (remindersCancelled && floating?.kind === "task")
+      void closeFloatingTask();
   }
 
   async function closeFloatingTask() {
@@ -733,21 +771,40 @@ export function App() {
     : inboxes.find(({ id }) => id === activeInbox)?.label;
   const isToday = !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
-  const commands = [
-    { label: "Capturar tarea", run: () => capture.current?.focus() },
-    ...layouts.map(({ id, label }) => ({
-      label: `Abrir ${label.toLocaleLowerCase("es")}`,
-      run: () => setLayout(id),
-    })),
-    ...inboxes.map(({ id, label }) => ({
-      label: `Ir a ${label}`,
-      run: () => navigate(id),
-    })),
-    ...projects.map(({ id, name }) => ({
-      label: `Abrir proyecto ${name}`,
-      run: () => navigate("all", id),
-    })),
-  ].filter(({ label }) =>
+  const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
+    [
+      { label: "Capturar tarea", run: () => capture.current?.focus() },
+      {
+        label: "Alternar modo claro y oscuro",
+        run: () => changeTheme(!darkMode),
+      },
+      ...layouts.map(({ id, label }) => ({
+        label: `Abrir ${label.toLocaleLowerCase("es")}`,
+        run: () => setLayout(id),
+      })),
+      ...inboxes.map(({ id, label }) => ({
+        label: `Ir a ${label}`,
+        run: () => navigate(id),
+      })),
+      ...projects.map(({ id, name }) => ({
+        label: `Abrir proyecto ${name}`,
+        run: () => navigate("all", id),
+      })),
+      {
+        label: "Borrar todas las tareas",
+        run: () => {
+          if (!snapshot) return;
+          if (snapshot.items.length) {
+            setDeletion({ ids: snapshot.items.map(({ id }) => id) });
+          } else {
+            setError("");
+            setNotice("No hay tareas que borrar.");
+          }
+        },
+        disabled: !snapshot,
+      },
+    ];
+  const commands = allCommands.filter(({ label }) =>
     label
       .toLocaleLowerCase("es")
       .includes(query.trim().toLocaleLowerCase("es")),
@@ -801,7 +858,7 @@ export function App() {
           "Tarea guardada.",
         )
       }
-      remove={() => void removeTask(selected)}
+      remove={() => setDeletion({ item: selected })}
       close={() => {
         if (floating?.kind === "task") void closeFloatingTask();
         else setSelectedId(undefined);
@@ -813,6 +870,23 @@ export function App() {
           : undefined
       }
     />
+  );
+
+  const deleteConfirmation = deletion && (
+    <DeleteConfirmation
+      title={
+        "item" in deletion ? "¿Eliminar tarea?" : "¿Borrar todas las tareas?"
+      }
+      confirmLabel={
+        "item" in deletion ? "Eliminar tarea" : "Borrar todas las tareas"
+      }
+      onCancel={() => setDeletion(undefined)}
+      onConfirm={() => confirmDeletion(deletion)}
+    >
+      {"item" in deletion
+        ? `Se eliminará «${deletion.item.title}». El cambio se propagará a los dispositivos sincronizados.`
+        : `Se borrarán ${deletion.ids.length === 1 ? "1 tarea" : `${deletion.ids.length} tareas`} de todo el espacio de trabajo, incluidas las de otros proyectos. El cambio se propagará a los dispositivos sincronizados.`}
+    </DeleteConfirmation>
   );
 
   const viewLoading = readError ? (
@@ -832,6 +906,7 @@ export function App() {
           now={now}
           open={openTask}
           move={move}
+          expanded={expanded}
         />
       )}
       {layout === "calendar" && (
@@ -846,6 +921,7 @@ export function App() {
             )
           }
           position={floatingTasks?.position}
+          expanded={expanded}
           onPositionChange={(position) => {
             calendarPosition.current = position;
           }}
@@ -856,28 +932,49 @@ export function App() {
 
   if (floating?.kind === "task") {
     return (
-      taskDetail ?? (
-        <main className="p-5">
-          {feedback}
-          {viewLoading}
-          {snapshot && !readError && (
-            <p className="text-sm text-muted">
-              Esta tarea ya no está disponible.
-            </p>
-          )}
-        </main>
-      )
+      <>
+        {taskDetail ?? (
+          <main className="p-5">
+            {feedback}
+            {viewLoading}
+            {snapshot && !readError && (
+              <p className="text-sm text-muted">
+                Esta tarea ya no está disponible.
+              </p>
+            )}
+          </main>
+        )}
+        {deleteConfirmation}
+      </>
     );
   }
 
   if (floatingTasks) {
     return (
-      <main className="min-h-svh p-4">
-        <h1 className="mb-3 text-lg font-semibold">{heading}</h1>
-        {!selected && feedback}
-        {viewLoading}
-        {boardOrCalendar}
+      <main
+        className={`flex flex-col gap-3 p-4 ${expanded ? "h-dvh" : "min-h-svh"}`}
+      >
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <h1 className="min-w-0 text-lg font-semibold wrap-anywhere">
+            {heading ??
+              (floatingTasks.kind === "board" ? "Tablero" : "Calendario")}
+          </h1>
+          <button
+            type="button"
+            className="topbar-button gap-1.5 px-2.5"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <InterfaceIcon name={expanded ? "collapse" : "expand"} />
+            {expanded ? "Contraer vista" : "Expandir vista"}
+          </button>
+        </header>
+        {!selected && (notice || error) && <div>{feedback}</div>}
+        <div className={expanded ? "min-h-0 flex-1 overflow-auto" : undefined}>
+          {viewLoading}
+          {boardOrCalendar}
+        </div>
         {taskDetail}
+        {deleteConfirmation}
       </main>
     );
   }
@@ -915,7 +1012,11 @@ export function App() {
               <span className="hidden sm:inline">Comandos</span>
               <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
-            <AppControls store={repositories.sync} />
+            <AppControls
+              store={repositories.sync}
+              darkMode={darkMode}
+              onThemeChange={changeTheme}
+            />
           </div>
           {desktopWindow && <DesktopWindowControls />}
         </header>
@@ -925,7 +1026,7 @@ export function App() {
             alt="Organify"
             width={2172}
             height={724}
-            className="h-auto w-36 object-contain md:mb-3 md:w-full md:max-w-53"
+            className="sidebar-logo h-auto w-36 object-contain md:mb-3 md:w-full md:max-w-53"
           />
           <div className="grid gap-2">
             <h2 id="task-navigation-title" className="sidebar-label">
@@ -1234,7 +1335,7 @@ export function App() {
                             >
                               <InterfaceIcon
                                 name="more"
-                                className="size-5 text-black [stroke-width:3]"
+                                className="size-5 text-foreground [stroke-width:3]"
                               />
                             </summary>
                             <div className="action-popover p-1">
@@ -1267,7 +1368,7 @@ export function App() {
                                 className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
                                 onClick={(event) => {
                                   closeDisclosure(event.currentTarget);
-                                  void removeTask(item);
+                                  setDeletion({ item });
                                 }}
                               >
                                 <InterfaceIcon name="trash" />
@@ -1290,6 +1391,7 @@ export function App() {
       </div>
 
       {taskDetail}
+      {deleteConfirmation}
 
       {reminderAlert && (
         <div className="fixed right-4 bottom-4 z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
@@ -1318,7 +1420,7 @@ export function App() {
           onSubmit={(event) => {
             event.preventDefault();
             const command = commands[0];
-            if (command) {
+            if (command && !command.disabled) {
               palette.current?.close();
               command.run();
             }
@@ -1335,11 +1437,12 @@ export function App() {
         </form>
         {commands.length ? (
           <ul className="grid max-h-64 gap-1 overflow-auto">
-            {commands.map(({ label, run }, index) => (
+            {commands.map(({ label, run, disabled }, index) => (
               <li key={`${index}-${label}`}>
                 <button
                   type="button"
-                  className="nav-link w-full"
+                  className="nav-link w-full disabled:opacity-50"
+                  disabled={disabled}
                   onClick={() => {
                     palette.current?.close();
                     run();

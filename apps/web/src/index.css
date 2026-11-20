@@ -1,11 +1,56 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
   --background: #f7f7fa;
   --foreground: #19192a;
   --primary: #7047eb;
   --primary-foreground: #fff;
+  --paper: #fff;
+  --panel: #f7f5fb;
+  --line: #ecebf2;
+  --control-line: #dcd8e7;
+  --muted: #706c7e;
+  --tint: #f1edfc;
+  --accent-ink: #5e3fbe;
+  --danger: #b53349;
+  --danger-button: #b53349;
+  --success: #15803d;
+  --success-tint: #ecfdf5;
+  --topbar: #fafafd;
+  --focus-line: #e8e0fb;
+  --focus-background: linear-gradient(105deg, #f2eefc, #f9f7ff 59%, #f4f0fc);
+  --calendar-today: #f7f3ff;
+  --calendar-event: #eee9fb;
+  --calendar-event-line: #aa91ed;
+  --calendar-event-text: #4e358d;
   --radius: 0.75rem;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #16141e;
+  --foreground: #f1edf8;
+  --primary: #b39aff;
+  --primary-foreground: #211739;
+  --paper: #201d2a;
+  --panel: #272335;
+  --line: #373145;
+  --control-line: #655a78;
+  --muted: #b8aec8;
+  --tint: #32264b;
+  --accent-ink: #cbb7ff;
+  --danger: #ff9aab;
+  --danger-button: #9f3045;
+  --success: #76dca0;
+  --success-tint: #203a31;
+  --topbar: #1a1723;
+  --focus-line: #47365f;
+  --focus-background: linear-gradient(105deg, #302442, #251e33 59%, #2a223b);
+  --calendar-today: #302641;
+  --calendar-event: #382953;
+  --calendar-event-line: #9d82dc;
+  --calendar-event-text: #e6daff;
 }
 
 @theme inline {
@@ -13,14 +58,17 @@
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-paper: #fff;
-  --color-panel: #f7f5fb;
-  --color-line: #ecebf2;
-  --color-control-line: #dcd8e7;
-  --color-muted: #706c7e;
-  --color-tint: #f1edfc;
-  --color-accent-ink: #5e3fbe;
-  --color-danger: #b53349;
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-control-line: var(--control-line);
+  --color-muted: var(--muted);
+  --color-tint: var(--tint);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-button: var(--danger-button);
+  --color-success: var(--success);
+  --color-success-tint: var(--success-tint);
   --radius-md: calc(var(--radius) - 2px);
 }
 
@@ -32,6 +80,10 @@ body {
 button:enabled,
 summary {
   cursor: pointer;
+}
+
+[data-theme="dark"] .sidebar-logo {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 dialog::backdrop {
@@ -57,7 +109,7 @@ dialog::backdrop {
 
   .app-topbar {
     @apply flex min-w-0 items-center justify-between gap-2 border-b border-line px-4 py-3 sm:px-6 lg:px-[42px];
-    background: #fafafd;
+    background: var(--topbar);
   }
 
   .app-topbar-desktop {
@@ -113,8 +165,8 @@ dialog::backdrop {
 
   .focus-card {
     @apply relative mb-7 flex min-h-40 items-center overflow-hidden rounded-xl border px-5 py-6 sm:px-6;
-    border-color: #e8e0fb;
-    background: linear-gradient(105deg, #f2eefc, #f9f7ff 59%, #f4f0fc);
+    border-color: var(--focus-line);
+    background: var(--focus-background);
   }
 
   .focus-progress {
@@ -164,7 +216,7 @@ dialog::backdrop {
   }
 
   .task-check {
-    @apply grid size-5 shrink-0 place-items-center rounded-full border border-control-line text-white hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:border-primary aria-pressed:bg-primary;
+    @apply grid size-5 shrink-0 place-items-center rounded-full border border-control-line text-primary-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:border-primary aria-pressed:bg-primary;
   }
 
   .disclosure-trigger {
@@ -181,18 +233,22 @@ dialog::backdrop {
 }
 
 .organify-calendar {
-  --fc-border-color: var(--color-line);
-  --fc-button-bg-color: var(--color-panel);
-  --fc-button-border-color: var(--color-control-line);
-  --fc-button-text-color: var(--color-accent-ink);
-  --fc-button-hover-bg-color: var(--color-tint);
+  --fc-page-bg-color: var(--paper);
+  --fc-neutral-bg-color: var(--panel);
+  --fc-neutral-text-color: var(--muted);
+  --fc-border-color: var(--line);
+  --fc-list-event-hover-bg-color: var(--panel);
+  --fc-button-bg-color: var(--panel);
+  --fc-button-border-color: var(--control-line);
+  --fc-button-text-color: var(--accent-ink);
+  --fc-button-hover-bg-color: var(--tint);
   --fc-button-hover-border-color: var(--primary);
-  --fc-button-active-bg-color: var(--color-tint);
+  --fc-button-active-bg-color: var(--tint);
   --fc-button-active-border-color: var(--primary);
-  --fc-today-bg-color: #f7f3ff;
-  --fc-event-bg-color: #eee9fb;
-  --fc-event-border-color: #aa91ed;
-  --fc-event-text-color: #4e358d;
+  --fc-today-bg-color: var(--calendar-today);
+  --fc-event-bg-color: var(--calendar-event);
+  --fc-event-border-color: var(--calendar-event-line);
+  --fc-event-text-color: var(--calendar-event-text);
 }
 
 .organify-calendar .fc-header-toolbar {
@@ -201,10 +257,6 @@ dialog::backdrop {
 
 .organify-calendar .fc-toolbar-title {
   @apply text-base font-semibold;
-}
-
-.organify-calendar .fc-header-toolbar {
-  @apply flex-wrap gap-2;
 }
 
 .organify-calendar .fc-button {

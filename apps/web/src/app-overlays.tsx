@@ -1,10 +1,18 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Capacitor } from "@capacitor/core";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
 import { DesktopSettings, desktopWindow } from "./desktop-windows";
+import { InterfaceIcon } from "./interface-icon";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 
 const updated = (text: string) => ({ text, label: "Actualizado" as const });
@@ -21,6 +29,21 @@ type Release = {
 };
 
 const releases: Release[] = [
+  {
+    version: "0.9.0",
+    date: "2026-11-20",
+    changes: [
+      updated("Elige el modo claro u oscuro en Ajustes o desde Comandos."),
+      updated("Borra todas las tareas desde Comandos con una confirmación."),
+      improved("Las confirmaciones de borrado usan el estilo de Organify."),
+      {
+        ...updated(
+          "Expande o contrae el Tablero y el Calendario en sus ventanas independientes.",
+        ),
+        windowsOnly: true,
+      },
+    ],
+  },
   {
     version: "0.8.0",
     date: "2026-11-20",
@@ -207,6 +230,102 @@ export function CloseDialogButton({
   );
 }
 
+const dialogClass =
+  "m-auto max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-line bg-paper text-foreground shadow-xl backdrop:bg-black/35";
+const dialogHeaderClass =
+  "flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6";
+
+export function DeleteConfirmation({
+  title,
+  children,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useLayoutEffect(() => {
+    const modal = dialog.current;
+    modal?.showModal();
+    cancelButton.current?.focus();
+    return () => modal?.close();
+  }, []);
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch {
+      setError("No se pudo completar el borrado. Vuelve a intentarlo.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      className={`${dialogClass} w-[min(28rem,calc(100%-2rem))]`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <div className={dialogHeaderClass}>
+        <h2 id={titleId} className="text-lg font-semibold">
+          {title}
+        </h2>
+        <CloseDialogButton onClick={onCancel} disabled={busy} />
+      </div>
+      <div className="space-y-3 p-5 text-sm">
+        <p id={descriptionId} className="wrap-anywhere">
+          {children}
+        </p>
+        {error && (
+          <p role="alert" className="text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-line px-4 py-3 sm:px-6">
+        <button
+          ref={cancelButton}
+          type="button"
+          className="nav-link"
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancelar
+        </button>
+        <Button
+          type="button"
+          className="gap-1.5 bg-danger-button text-white hover:bg-danger-button/90"
+          onClick={() => void confirm()}
+          disabled={busy}
+        >
+          <InterfaceIcon name="trash" />
+          {busy ? "Borrando…" : confirmLabel}
+        </Button>
+      </div>
+    </dialog>
+  );
+}
+
 function AppDialog({
   title,
   label = title,
@@ -241,9 +360,9 @@ function AppDialog({
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
-        className={`m-auto max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-line bg-paper text-foreground shadow-xl backdrop:bg-black/35 ${wide ? "w-[min(60rem,calc(100%-1.5rem))]" : "w-[min(32rem,calc(100%-2rem))]"}`}
+        className={`${dialogClass} ${wide ? "w-[min(60rem,calc(100%-1.5rem))]" : "w-[min(32rem,calc(100%-2rem))]"}`}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6">
+        <div className={dialogHeaderClass}>
           <h2 id={titleId} className="text-lg font-semibold">
             {title}
           </h2>
@@ -287,7 +406,7 @@ function ReleaseChanges({ release }: { release: Release }) {
             className="group grid grid-cols-[5rem_1.5rem_minmax(0,1fr)] items-start"
           >
             <span
-              className={`rounded-full px-1 py-0.5 text-center text-xs font-medium ${label === "Actualizado" ? "bg-tint text-accent-ink" : "bg-emerald-50 text-emerald-800"}`}
+              className={`rounded-full px-1 py-0.5 text-center text-xs font-medium ${label === "Actualizado" ? "bg-tint text-accent-ink" : "bg-success-tint text-success"}`}
             >
               {label}
             </span>
@@ -296,7 +415,7 @@ function ReleaseChanges({ release }: { release: Release }) {
               className="relative w-px justify-self-center self-stretch bg-line"
             >
               <span
-                className={`absolute top-2.5 left-1/2 size-2 -translate-1/2 rounded-full ${label === "Actualizado" ? "bg-accent-ink" : "bg-emerald-800"}`}
+                className={`absolute top-2.5 left-1/2 size-2 -translate-1/2 rounded-full ${label === "Actualizado" ? "bg-accent-ink" : "bg-success"}`}
               />
             </span>
             <span className="pb-2.5 group-last:pb-0">{text}</span>
@@ -538,7 +657,15 @@ function SyncBadge({ status }: { status: SyncStatus }) {
   );
 }
 
-export function AppControls({ store }: { store: TaskRepositories["sync"] }) {
+export function AppControls({
+  store,
+  darkMode,
+  onThemeChange,
+}: {
+  store: TaskRepositories["sync"];
+  darkMode: boolean;
+  onThemeChange: (dark: boolean) => void;
+}) {
   const [status, setStatus] = useState<SyncStatus>("inactive");
   const accountLabel = `Cuenta. ${syncStatusLabel[status]}`;
   return (
@@ -565,11 +692,20 @@ export function AppControls({ store }: { store: TaskRepositories["sync"] }) {
           </svg>
         }
       >
-        {desktopWindow ? (
-          <DesktopSettings />
-        ) : (
-          <p className="text-sm text-muted">Sección en desarrollo.</p>
-        )}
+        <div className="grid gap-4">
+          <label className="grid gap-1 text-sm">
+            Tema
+            <select
+              className="field"
+              value={darkMode ? "dark" : "light"}
+              onChange={(event) => onThemeChange(event.target.value === "dark")}
+            >
+              <option value="light">Modo claro</option>
+              <option value="dark">Modo oscuro</option>
+            </select>
+          </label>
+          {desktopWindow && <DesktopSettings />}
+        </div>
       </AppDialog>
       <AppDialog
         title="Cuenta"
