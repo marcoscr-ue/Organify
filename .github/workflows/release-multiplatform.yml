@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
+      title: ${{ steps.version.outputs.title }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -35,26 +36,67 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import { readFileSync, appendFileSync } from 'node:fs';
-          if (!['', 'all', 'windows', 'android', 'pwa'].includes(process.env.PLATFORM)) throw new Error('Plataforma desconocida');
-          const paths = ['apps/web/package.json', 'apps/desktop/package.json', 'apps/mobile/package.json', 'apps/desktop/src-tauri/tauri.conf.json'];
-          const versions = paths.map(path => JSON.parse(readFileSync(path, 'utf8')).version);
-          if (new Set(versions).size !== 1 || !/^\d+\.\d+\.\d+$/.test(versions[0])) throw new Error('Las versiones deben coincidir y usar major.minor.patch');
-          appendFileSync(process.env.GITHUB_OUTPUT, `value=${versions[0]}\n`);
+          const platform = process.env.PLATFORM || 'all';
+          if (!['all', 'windows', 'android', 'pwa'].includes(platform)) throw new Error('Plataforma desconocida');
+          const read = path => JSON.parse(readFileSync(path, 'utf8'));
+          const web = read('apps/web/package.json').version;
+          const mobile = read('apps/mobile/package.json').version;
+          const desktop = read('apps/desktop/package.json');
+          const tauri = read('apps/desktop/src-tauri/tauri.conf.json').version;
+          const isWindowsHotfix = platform === 'windows' && desktop.version !== web;
+          const numericVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+          if (![web, mobile, desktop.version, tauri].every(version => numericVersion.test(version))
+              || desktop.version !== tauri || web !== mobile || (!isWindowsHotfix && desktop.version !== web)) {
+            throw new Error('Mantén alineadas las versiones y usa major.minor.patch. Solo Windows admite una versión de corrección independiente.');
+          }
+          if (isWindowsHotfix) {
+            const base = web.split('.').map(BigInt);
+            const next = desktop.version.split('.').map(BigInt);
+            const changed = next.findIndex((part, index) => part !== base[index]);
+            if (next[changed] <= base[changed]) throw new Error('La corrección de Windows debe superar la versión común.');
+          }
+          const version = isWindowsHotfix ? desktop.version : web;
+          const label = isWindowsHotfix ? (desktop.releaseLabel || `v${version}`) : `v${version}`;
+          if (!/^[a-zA-Z0-9.+-]+$/.test(label)) throw new Error('Nombre de release no válido.');
+          appendFileSync(process.env.GITHUB_OUTPUT, `value=${version}\ntitle=Organify ${label}\nwindows_hotfix=${isWindowsHotfix}\n`);
+          JS
+      - name: Conservar el manifiesto Android publicado
+        if: steps.version.outputs.windows_hotfix == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --pattern android.json --dir "$RUNNER_TEMP"
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const manifest = JSON.parse(readFileSync(join(process.env.RUNNER_TEMP, 'android.json'), 'utf8'));
+          const prefix = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/`;
+          if (manifest.applicationId !== 'app.organify.personal'
+              || !Number.isSafeInteger(manifest.versionCode) || manifest.versionCode < 1
+              || typeof manifest.apkUrl !== 'string'
+              || !manifest.apkUrl.startsWith(prefix) || !manifest.apkUrl.endsWith('.apk')) {
+            throw new Error('El manifiesto Android publicado debe apuntar a un APK versionado del repositorio.');
+          }
           JS
       - name: Preparar borrador de release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.value }}
+          RELEASE_TITLE: ${{ steps.version.outputs.title }}
+          WINDOWS_HOTFIX: ${{ steps.version.outputs.windows_hotfix }}
         run: |
           if gh release view "v$VERSION" --json isDraft,targetCommitish > release-state.json; then
             node -e "const r = require('./release-state.json'); if (!r.isDraft) throw new Error('Esta version ya esta publicada. Incrementa la version para una nueva publicacion.'); if (r.targetCommitish !== process.env.GITHUB_SHA) throw new Error('El borrador debe apuntar al mismo commit. Usa una version nueva o corrige el destino del borrador.')"
           else
-            gh release create "v$VERSION" --draft --target "$GITHUB_SHA" --title "Organify v$VERSION"
+            gh release create "v$VERSION" --draft --target "$GITHUB_SHA" --title "$RELEASE_TITLE"
           fi
           # Una etiqueta existente debe representar el mismo codigo que se compila.
           if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
             git fetch origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
             test "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" || { echo 'La etiqueta pertenece a otro commit. Incrementa la version.' >&2; exit 1; }
+          fi
+          if [ "$WINDOWS_HOTFIX" = true ]; then
+            gh release upload "v$VERSION" "$RUNNER_TEMP/android.json" --clobber
           fi
   release-windows:
     runs-on: windows-latest
@@ -100,8 +142,8 @@ jobs:
           projectPath: apps/desktop
           tauriScript: pnpm exec tauri
           args: --config "${{ env.ORGANIFY_UPDATER_CONFIG }}"
-          tagName: v__VERSION__
-          releaseName: Organify v__VERSION__
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: ${{ needs.prepare.outputs.title }}
           releaseDraft: true
           includeUpdaterJson: true
   release-android:

@@ -683,7 +683,6 @@ export function App() {
 
   return (
     <div className="min-h-svh">
-      <DesktopWindowControls />
       <div className="app-shell">
         <header className="app-topbar">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted">
@@ -695,6 +694,13 @@ export function App() {
               {heading ?? "Tareas"}
             </span>
           </div>
+          {window.__TAURI__?.window && (
+            <div
+              aria-hidden="true"
+              data-tauri-drag-region
+              className="min-w-2 flex-1 self-stretch"
+            />
+          )}
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
@@ -707,6 +713,7 @@ export function App() {
               <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
             <AppControls store={repositories.sync} />
+            <DesktopWindowControls />
           </div>
         </header>
         <aside className="app-sidebar">
@@ -1172,58 +1179,48 @@ export function App() {
   );
 }
 
-type DesktopWindowApi = {
-  getCurrentWindow: () => {
-    minimize: () => Promise<void>;
-    toggleMaximize: () => Promise<void>;
-    close: () => Promise<void>;
-  };
-};
-
 function DesktopWindowControls() {
-  const [windowApi, setWindowApi] = useState<DesktopWindowApi>();
-  useEffect(() => {
-    const tauri = window as Window & {
-      __TAURI__?: { window?: DesktopWindowApi };
-    };
-    setWindowApi(tauri.__TAURI__?.window);
-  }, []);
-  if (!windowApi) return null;
-  const current = windowApi.getCurrentWindow();
+  const current = window.__TAURI__?.window?.getCurrentWindow();
+  if (!current) return null;
   const buttons = [
-    { label: "Minimizar", text: "−", run: () => void current.minimize() },
+    { label: "Minimizar", text: "−", run: () => current.minimize() },
     {
       label: "Maximizar o restaurar",
       text: "□",
-      run: () => void current.toggleMaximize(),
+      run: () => current.toggleMaximize(),
     },
     {
       label: "Cerrar",
       text: "×",
-      run: () => void current.close(),
+      run: () => current.close(),
       danger: true,
     },
   ];
   return (
-    <header
-      data-tauri-drag-region
-      className="flex h-9 items-center justify-between border-b border-line bg-paper pl-3 text-xs text-muted select-none [app-region:drag]"
+    <div
+      role="group"
+      aria-label="Controles de ventana"
+      className="ml-2 flex h-9 shrink-0 border-l border-line pl-2"
     >
-      <span data-tauri-drag-region>Organify</span>
-      <div className="flex h-full [app-region:no-drag]">
-        {buttons.map(({ label, text, run, danger }) => (
-          <button
-            key={label}
-            type="button"
-            aria-label={label}
-            title={label}
-            onClick={run}
-            className={`grid h-full w-12 place-items-center text-base text-foreground hover:bg-panel ${danger ? "hover:bg-danger hover:text-white" : ""}`}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-    </header>
+      {buttons.map(({ label, text, run, danger }) => (
+        <button
+          key={label}
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={() => {
+            void run().catch((error: unknown) =>
+              console.error(
+                `No se pudo ejecutar ${label.toLowerCase()}.`,
+                error,
+              ),
+            );
+          }}
+          className={`grid h-full w-8 place-items-center rounded-md text-base text-foreground focus-visible:outline-2 focus-visible:outline-primary ${danger ? "hover:bg-danger hover:text-white" : "hover:bg-panel"}`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -4,6 +4,13 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 declare global {
   interface Window {
     __TAURI__?: {
+      window?: {
+        getCurrentWindow: () => {
+          minimize: () => Promise<void>;
+          toggleMaximize: () => Promise<void>;
+          close: () => Promise<void>;
+        };
+      };
       core: {
         invoke: (
           command: string,
