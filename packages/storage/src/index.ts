@@ -63,6 +63,7 @@ export interface TaskRepositories {
     ): Promise<void>;
     move(id: Id, status: Status): Promise<void>;
     remove(id: Id): Promise<void>;
+    removeMany(ids: readonly Id[]): Promise<void>;
   };
   projects: {
     create(name: string): Promise<Id>;

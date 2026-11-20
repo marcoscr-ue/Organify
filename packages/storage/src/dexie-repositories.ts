@@ -127,6 +127,19 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     await db.documents.put({ id, state });
   }
 
+  function removeItems(ids: readonly Id[]) {
+    return db.transaction("rw", writeTables, async () => {
+      const deletedAt = new Date().toISOString();
+      for (const id of ids) {
+        const item = await db.items.get(id);
+        if (!item || item.deletedAt) continue;
+        const next = { ...item, deletedAt };
+        await db.items.put(next);
+        await record(db, "item", next, item);
+      }
+    });
+  }
+
   return {
     documents: {
       subscribe(id, next, error) {
@@ -282,16 +295,8 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           await record(db, "item", next, item);
         });
       },
-      remove(id) {
-        return db.transaction("rw", writeTables, async () => {
-          const task = await db.items.get(id);
-          if (task && !task.deletedAt) {
-            const next = { ...task, deletedAt: new Date().toISOString() };
-            await db.items.put(next);
-            await record(db, "item", next, task);
-          }
-        });
-      },
+      remove: (id) => removeItems([id]),
+      removeMany: removeItems,
     },
     projects: {
       create(input) {

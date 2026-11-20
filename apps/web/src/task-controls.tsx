@@ -53,7 +53,7 @@ export function TaskStatusIcon({ item, now }: { item: Item; now: number }) {
     <svg
       role="img"
       aria-label={label}
-      className={`size-5 shrink-0 ${done ? "text-green-700" : "text-danger"}`}
+      className={`size-5 shrink-0 ${done ? "text-success" : "text-danger"}`}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
