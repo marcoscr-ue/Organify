@@ -1,0 +1,136 @@
+@layer components {
+  .task-nav-group > summary {
+    list-style: none;
+  }
+
+  .task-nav-group > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .task-nav-chevron {
+    transition: transform 150ms ease;
+  }
+
+  .task-nav-group:not([open]) .task-nav-chevron {
+    transform: rotate(-90deg);
+  }
+
+  .today-routines,
+  .routine-overview {
+    @apply mb-5 overflow-hidden rounded-xl border border-line;
+    background: var(--focus-background);
+  }
+
+  .routine-summary {
+    @apply flex flex-wrap items-center gap-3 px-4 py-3;
+  }
+
+  .routine-symbol {
+    @apply grid size-9 shrink-0 place-items-center rounded-lg bg-tint text-accent-ink;
+  }
+
+  .routine-symbol-weekly {
+    @apply bg-success-tint text-success;
+  }
+
+  .today-routine-toggle {
+    @apply flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-tint focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary;
+  }
+
+  .routine-grid {
+    @apply grid grid-cols-1 gap-3 sm:grid-cols-2;
+  }
+
+  .routine-card {
+    @apply min-w-0 rounded-xl border border-line bg-paper p-4 text-left transition hover:border-primary/40 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-primary;
+  }
+
+  .routine-card-footer {
+    @apply w-full border-t border-line pt-3;
+  }
+
+  .routine-streak {
+    @apply inline-flex items-center gap-1.5 text-sm;
+    color: #925722;
+  }
+
+  [data-theme="dark"] .routine-streak {
+    color: #edb982;
+  }
+
+  .routine-progress {
+    @apply flex items-center justify-between gap-3 text-xs text-muted;
+  }
+
+  .routine-progress progress {
+    @apply h-1.5 min-w-0 flex-1 appearance-none overflow-hidden rounded-full border-0 bg-tint;
+  }
+
+  .routine-progress progress::-webkit-progress-bar {
+    @apply rounded-full bg-tint;
+  }
+
+  .routine-progress progress::-webkit-progress-value {
+    @apply rounded-full bg-primary;
+  }
+
+  .routine-progress progress::-moz-progress-bar {
+    @apply rounded-full bg-primary;
+  }
+
+  .routine-empty {
+    @apply rounded-xl border border-dashed border-control-line bg-paper p-6 text-center text-sm text-muted;
+  }
+
+  .routine-dialog {
+    @apply m-auto max-h-[calc(100dvh-2rem)] w-[min(30rem,calc(100%-2rem))] overflow-auto rounded-2xl border border-line bg-paper p-0 text-foreground shadow-xl backdrop:bg-black/35;
+  }
+
+  .routine-dialog-content {
+    @apply p-4 sm:p-6;
+  }
+
+  .routine-caption {
+    @apply flex items-center gap-1.5 text-xs font-semibold tracking-wide text-accent-ink;
+  }
+
+  .routine-checklist {
+    @apply grid gap-1;
+  }
+
+  .routine-step {
+    @apply flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-panel;
+  }
+
+  .routine-step input {
+    @apply size-4 shrink-0 accent-primary;
+  }
+
+  .routine-step span {
+    @apply min-w-0 wrap-anywhere;
+  }
+
+  .routine-step input:checked + span {
+    @apply text-muted line-through;
+  }
+
+  .routine-streak-panel {
+    @apply flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-panel p-3;
+  }
+
+  .routine-history-row {
+    @apply flex flex-wrap justify-between gap-2 border-b border-line py-2 text-sm;
+  }
+
+  .routine-field {
+    @apply grid gap-1.5 text-sm font-semibold;
+  }
+
+  .routine-field .field {
+    @apply font-normal;
+  }
+
+  .routine-icon-button {
+    @apply grid size-9 shrink-0 place-items-center rounded-md hover:bg-panel focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30;
+  }
+}

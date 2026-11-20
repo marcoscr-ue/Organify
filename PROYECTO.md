@@ -234,6 +234,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 ## 11. Decisiones tomadas / pendientes
 
 **Tomadas**
+- En la 0.10.0 Rutinas añade checklists diarias y semanales, accesibles también desde Hoy. La zona horaria de creación fija los límites de cada ciclo y las marcas se sincronizan por paso y ciclo. Los cambios de frecuencia o pasos y las pausas se aplican a partir del siguiente ciclo.
 - En la 0.6.0 se retiraron de la interfaz las vistas guardadas y la edición de propiedades personalizadas. Se conservan los datos existentes y el protocolo de sincronización.
 - Nombre: **Organify**. Scope de paquetes sugerido: `@organify/*` (core, storage, sync, crypto, ui).
 - TypeScript + React + Vite, web/PWA primero, Tauri (PC) y Capacitor (solo Android) después.

@@ -8,6 +8,11 @@ const paths = {
   board: "M3 4h8v16H3zM15 4h6v9h-6z",
   search: "m16 16 4 4m-2-9a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z",
   plus: "M12 5v14M5 12h14",
+  chevron: "m6 9 6 6 6-6",
+  up: "m6 11 6-6 6 6m-6-6v14",
+  down: "m6 13 6 6 6-6m-6 6V5",
+  flame:
+    "M10 3c1 4-4 5-4 10a6 6 0 0 0 12 0c0-3-2-5-4-7 0 3-1 4-2 4 1-3 0-5-2-7Z",
   check: "m5 12 4 4L19 6",
   edit: "m14 5 5 5M4 20l4-.8L20 7l-3-3L5 16l-1 4Z",
   save: "M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8",

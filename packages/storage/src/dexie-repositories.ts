@@ -2,8 +2,22 @@ import * as Y from "yjs";
 import Dexie, { liveQuery, type Table } from "dexie";
 import { generateKeyBetween } from "fractional-indexing";
 import { v7 } from "uuid";
-import type { Id, Item, Project, Op, Replica } from "@organify/core";
-import { isProjectColor, tickHlc } from "@organify/core";
+import type {
+  Id,
+  Item,
+  Json,
+  Project,
+  Op,
+  Replica,
+  RoutineSchedule,
+} from "@organify/core";
+import {
+  isProjectColor,
+  isRoutineSchedule,
+  routineDate,
+  routineProgress,
+  tickHlc,
+} from "@organify/core";
 import {
   documentPrefix,
   materialize,
@@ -13,6 +27,7 @@ import {
   recordField,
 } from "./journal";
 import type { SavedView, TaskRepositories } from "./index";
+import { readRoutine, routineKeyPrefix } from "./routine-journal";
 
 class OrganifyDatabase extends Dexie {
   declare items: Table<Item, Id>;
@@ -74,6 +89,20 @@ function requiredText(value: string, message: string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(message);
   return trimmed;
+}
+
+function cleanSchedule(input: RoutineSchedule): RoutineSchedule {
+  const schedule = {
+    frequency: input.frequency,
+    steps: input.steps.map(({ id, label }) => ({ id, label: label.trim() })),
+  };
+  if (!isRoutineSchedule(schedule))
+    throw new Error("Añade al menos un paso y escribe su nombre.");
+  return schedule;
+}
+
+function scheduleValue({ frequency, steps }: RoutineSchedule) {
+  return { frequency, steps: steps.map(({ id, label }) => ({ id, label })) };
 }
 
 export function createTaskRepositories(name = "organify"): TaskRepositories {
@@ -140,7 +169,92 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     });
   }
 
+  async function getRoutine(id: Id) {
+    const key = "item:" + id;
+    const row =
+      key.startsWith(routineKeyPrefix) && (await db.replicas.get(key));
+    const routine = row && readRoutine(key, row.state);
+    if (!routine) throw new Error("La rutina ya no está disponible.");
+    return routine;
+  }
+
+  async function setRoutineField(id: Id, field: string, value: Json) {
+    await mergeReplica(
+      db,
+      await recordField(db, id, "routine:" + field, value),
+    );
+  }
+
   return {
+    routines: {
+      create(input) {
+        const name = requiredText(
+          input.name,
+          "Escribe un nombre para la rutina.",
+        );
+        const schedule = cleanSchedule(input);
+        return db.transaction("rw", writeTables, async () => {
+          const id = "routine/" + v7();
+          const timeZone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          const date = routineDate(Date.now(), timeZone);
+          await setRoutineField(id, "name", name);
+          await setRoutineField(id, "zone", timeZone);
+          await setRoutineField(id, "start", date);
+          await setRoutineField(
+            id,
+            "schedule:" + date,
+            scheduleValue(schedule),
+          );
+          return id;
+        });
+      },
+      update(id, changes) {
+        const name =
+          changes.name === undefined
+            ? undefined
+            : requiredText(changes.name, "Escribe un nombre para la rutina.");
+        const schedule = changes.schedule && cleanSchedule(changes.schedule);
+        return db.transaction("rw", writeTables, async () => {
+          const routine = await getRoutine(id);
+          const { cycle, nextSchedule } = routineProgress(routine, Date.now());
+          if (name !== undefined && name !== routine.name)
+            await setRoutineField(id, "name", name);
+          if (!schedule) return;
+          const next = scheduleValue(schedule);
+          if (
+            JSON.stringify(next) !== JSON.stringify(scheduleValue(nextSchedule))
+          )
+            await setRoutineField(id, "schedule:" + cycle.end, next);
+        });
+      },
+      setPaused(id, paused) {
+        return db.transaction("rw", writeTables, async () => {
+          const routine = await getRoutine(id);
+          const { cycle, nextPaused } = routineProgress(routine, Date.now());
+          if (nextPaused !== paused)
+            await setRoutineField(id, "pause:" + cycle.end, paused);
+        });
+      },
+      setStep(id, start, step, checked) {
+        return db.transaction("rw", writeTables, async () => {
+          const routine = await getRoutine(id);
+          const { cycle, started } = routineProgress(routine, Date.now());
+          if (!started || cycle.start !== start || cycle.paused)
+            throw new Error("El ciclo ha cambiado. Abre la checklist actual.");
+          if (!cycle.steps.some(({ id }) => id === step))
+            throw new Error("Este paso ya no está disponible.");
+          if (cycle.checked.has(step) !== checked)
+            await setRoutineField(id, `check:${start}:${step}`, checked);
+        });
+      },
+      remove(id) {
+        return db.transaction("rw", writeTables, async () => {
+          await getRoutine(id);
+          await setRoutineField(id, "removed", true);
+        });
+      },
+    },
     documents: {
       subscribe(id, next, error) {
         const listener = liveQuery(
@@ -219,13 +333,22 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     },
     subscribe(next, error) {
       const subscription = liveQuery(() =>
-        db.transaction("r", db.items, db.projects, async () => ({
+        db.transaction("r", db.items, db.projects, db.replicas, async () => ({
           items: (await db.items.orderBy("[status+order]").toArray()).filter(
             (item) => !item.deletedAt,
           ),
           projects: (await db.projects.orderBy("order").toArray()).filter(
             (project) => !project.deletedAt && !project.archived,
           ),
+          routines: (
+            await db.replicas
+              .where(":id")
+              .startsWith(routineKeyPrefix)
+              .toArray()
+          ).flatMap(({ key, state }) => {
+            const routine = readRoutine(key, state);
+            return routine ? [routine] : [];
+          }),
         })),
       ).subscribe({ next, error });
       return () => subscription.unsubscribe();

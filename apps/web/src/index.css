@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./routines.css";
 
 :root {
   color-scheme: light;
