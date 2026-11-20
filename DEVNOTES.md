@@ -190,6 +190,13 @@ Abre dos tareas con **Abrir en ventana** desde la lista o desde el detalle. Edit
 
 En una instalación de Windows, programa un recordatorio y elige **Minimizar y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece y que puedes restaurar la ventana desde la barra de tareas. Selecciona **Salir de Organify** y comprueba que la X cierra también las ventanas independientes.
 
+## Probar Rutinas
+
+- Crea una rutina semanal de dos pasos y márcalos desde **Hoy** y desde el detalle en **Rutinas**. Comprueba que la racha sube una vez y vuelve al valor anterior al desmarcar un paso.
+- Cambia los pasos o la frecuencia y comprueba que la checklist actual se mantiene hasta cerrar el ciclo. La pausa y la reanudación también se aplican al próximo ciclo.
+- Con la misma cuenta en dos dispositivos, sincroniza la rutina, desconecta ambos y marca un paso distinto en cada uno. Al reconectar, deben verse ambos pasos y una sola finalización del ciclo.
+- Sincroniza una cuenta de prueba que tenga rutinas con un cliente 0.9.0 y crea una tarea en ese cliente. Comprueba que la tarea llega a la 0.10.0. Actualiza el cliente 0.9.0 y comprueba que aparecen las rutinas y sus marcas.
+
 ## Fase 5 · Descripción en bloques
 
 Después de actualizar `dev`, ejecuta `corepack pnpm install` y guarda el

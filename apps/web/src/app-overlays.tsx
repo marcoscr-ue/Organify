@@ -15,8 +15,30 @@ import { DesktopSettings, desktopWindow } from "./desktop-windows";
 import { InterfaceIcon } from "./interface-icon";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 
-const updated = (text: string) => ({ text, label: "Actualizado" as const });
-const improved = (text: string) => ({ text, label: "Mejorado" as const });
+const introduced = (text: string) => ({ text, kind: "new" as const });
+const updated = (text: string) => ({ text, kind: "updated" as const });
+const improved = (text: string) => ({ text, kind: "improved" as const });
+
+const releaseChangeStyles = {
+  new: {
+    order: 0,
+    label: "¡Nuevo!",
+    badge: "bg-danger/10 text-danger",
+    dot: "bg-danger",
+  },
+  updated: {
+    order: 1,
+    label: "Actualizado",
+    badge: "bg-tint text-accent-ink",
+    dot: "bg-accent-ink",
+  },
+  improved: {
+    order: 2,
+    label: "Mejorado",
+    badge: "bg-success-tint text-success",
+    dot: "bg-success",
+  },
+};
 
 type Release = {
   version: string;
@@ -24,11 +46,29 @@ type Release = {
   label?: string;
   windowsOnly?: boolean;
   changes: Array<
-    ReturnType<typeof updated | typeof improved> & { windowsOnly?: boolean }
+    ReturnType<typeof introduced | typeof updated | typeof improved> & {
+      windowsOnly?: boolean;
+    }
   >;
 };
 
 const releases: Release[] = [
+  {
+    version: "0.10.0",
+    date: "2026-11-20",
+    changes: [
+      introduced("Se ha publicado la primera iteración de las rutinas."),
+      updated(
+        "Crea rutinas diarias o semanales con checklist, historial y racha.",
+      ),
+      updated(
+        "Marca pasos desde Hoy y sincroniza el progreso entre dispositivos.",
+      ),
+      improved(
+        "El espacio de trabajo agrupa las vistas de Tareas y da acceso directo a Rutinas.",
+      ),
+    ],
+  },
   {
     version: "0.9.0",
     date: "2026-11-20",
@@ -381,13 +421,12 @@ const releaseMonth = new Intl.DateTimeFormat("es-ES", {
 });
 
 function ReleaseChanges({ release }: { release: Release }) {
-  const visible = release.changes.filter(
-    ({ windowsOnly }) => !windowsOnly || desktopWindow,
-  );
-  const changes = [
-    ...visible.filter(({ label }) => label === "Actualizado"),
-    ...visible.filter(({ label }) => label === "Mejorado"),
-  ];
+  const changes = release.changes
+    .filter(({ windowsOnly }) => !windowsOnly || desktopWindow)
+    .sort(
+      (a, b) =>
+        releaseChangeStyles[a.kind].order - releaseChangeStyles[b.kind].order,
+    );
 
   return (
     <>
@@ -400,27 +439,30 @@ function ReleaseChanges({ release }: { release: Release }) {
         </time>
       </header>
       <ul className="grid text-sm">
-        {changes.map(({ label, text }) => (
-          <li
-            key={text}
-            className="group grid grid-cols-[5rem_1.5rem_minmax(0,1fr)] items-start"
-          >
-            <span
-              className={`rounded-full px-1 py-0.5 text-center text-xs font-medium ${label === "Actualizado" ? "bg-tint text-accent-ink" : "bg-success-tint text-success"}`}
-            >
-              {label}
-            </span>
-            <span
-              aria-hidden="true"
-              className="relative w-px justify-self-center self-stretch bg-line"
+        {changes.map(({ kind, text }) => {
+          const { label, badge, dot } = releaseChangeStyles[kind];
+          return (
+            <li
+              key={text}
+              className="group grid grid-cols-[5rem_1.5rem_minmax(0,1fr)] items-start"
             >
               <span
-                className={`absolute top-2.5 left-1/2 size-2 -translate-1/2 rounded-full ${label === "Actualizado" ? "bg-accent-ink" : "bg-success"}`}
-              />
-            </span>
-            <span className="pb-2.5 group-last:pb-0">{text}</span>
-          </li>
-        ))}
+                className={`rounded-full px-1 py-0.5 text-center text-xs font-medium ${badge}`}
+              >
+                {label}
+              </span>
+              <span
+                aria-hidden="true"
+                className="relative w-px justify-self-center self-stretch bg-line"
+              >
+                <span
+                  className={`absolute top-2.5 left-1/2 size-2 -translate-1/2 rounded-full ${dot}`}
+                />
+              </span>
+              <span className="pb-2.5 group-last:pb-0">{text}</span>
+            </li>
+          );
+        })}
       </ul>
     </>
   );
