@@ -164,7 +164,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 - Auth de Supabase (email/contraseña o magic link) separada de la clave de cifrado: **la contraseña de login no debe ser la misma que deriva la clave**, o se deriva de forma independiente.
 - Búsqueda y filtros **solo en cliente** (el servidor no ve nada).
 - **Colaboración futura**: una clave por workspace/proyecto compartido, distribuida a cada miembro cifrada con su clave pública (**X25519 sealed boxes**). Diseñar el campo `workspaceId` desde el principio aunque ahora solo exista uno por usuario.
-- Nunca inventar primitivas criptográficas: solo libsodium, y revisar cada uso.
+- Usa libsodium para las operaciones sincronizadas y las envolturas de cuenta. El desbloqueo recordado usa una clave no exportable de Web Crypto para proteger una copia local de la clave maestra.
 
 ## 7. UX / Diseño
 
@@ -227,7 +227,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 - No mezclar lógica de sync con componentes React.
 - Antes de añadir una dependencia, explicar por qué y comprobar que está mantenida y funciona en web + Tauri + Capacitor.
 - No inventar APIs: ante una librería nueva o cambiante (Supabase, Tauri 2, Capacitor, TipTap, dnd-kit), **consultar su documentación actual** en lugar de fiarse de memoria.
-- Cripto: solo libsodium, sin primitivas propias; cualquier cambio en el formato de ops/cifrado lleva **campo de versión** y migración.
+- Usa las bibliotecas de cifrado previstas en la sección 6. Versiona los cambios de formato y prepara una migración cuando proceda.
 - Preferir soluciones simples; señalar explícitamente cualquier decisión que cierre puertas (formato de ops, esquema del servidor, formato de claves).
 - Mantener este documento actualizado cuando cambie una decisión (sección "Decisiones tomadas" más abajo).
 

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { mergeOp, parseOp, type Op, type Replica } from "../../core/src/index";
 import {
   MemoryAdapter,
@@ -74,4 +74,29 @@ it("conserva la cola offline y converge tras un envío repetido y el alta de un 
   expect(a.snapshot()).toEqual(b.snapshot());
   expect(c.snapshot()).toEqual(a.snapshot());
   expect(await adapter.pull("0", 100)).toHaveLength(2);
+});
+
+it("notifica el fallo y luego confirma el primer ciclo correcto al reintentar", async () => {
+  vi.useFakeTimers();
+  const adapter = new MemoryAdapter();
+  adapter.online = false;
+  const reportError = vi.fn();
+  const reportSuccess = vi.fn();
+  const stop = device(adapter, []).engine.start(reportError, reportSuccess);
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportSuccess).not.toHaveBeenCalled();
+
+    adapter.online = true;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reportSuccess).toHaveBeenCalledOnce();
+
+    stop();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reportSuccess).toHaveBeenCalledOnce();
+  } finally {
+    stop();
+    vi.useRealTimers();
+  }
 });

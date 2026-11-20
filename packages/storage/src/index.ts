@@ -71,3 +71,7 @@ export interface TaskRepositories {
 }
 
 export { createTaskRepositories } from "./dexie-repositories";
+export {
+  createDeviceUnlockStore,
+  type SavedDeviceUnlock,
+} from "./device-unlock";
