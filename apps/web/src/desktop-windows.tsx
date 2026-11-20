@@ -162,7 +162,7 @@ export function DesktopWindowControls() {
           aria-label={label}
           title={label}
           onClick={() => void run().catch(console.error)}
-          className={`grid h-8 w-11 place-items-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${label === "Cerrar" ? "hover:bg-[#c42b1c] hover:text-white" : "hover:bg-black/8"}`}
+          className={`grid h-8 w-11 place-items-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${label === "Cerrar" ? "hover:bg-[#c42b1c] hover:text-white" : "hover:bg-foreground/8"}`}
         >
           <svg
             aria-hidden="true"

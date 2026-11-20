@@ -161,12 +161,14 @@ export function Board({
   now,
   open,
   move,
+  expanded = false,
 }: {
   items: Item[];
   projects: ReadonlyMap<Id, Project>;
   now: number;
   open: (id: Id) => void;
   move: (id: Id, status: Status) => void;
+  expanded?: boolean;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -188,7 +190,9 @@ export function Board({
         if (status && typeof active.id === "string") move(active.id, status);
       }}
     >
-      <div className="flex items-stretch gap-3 overflow-x-auto pb-3">
+      <div
+        className={`flex items-stretch gap-3 overflow-x-auto pb-3 ${expanded ? "min-h-full" : ""}`}
+      >
         {statuses.map((status) => (
           <Column
             key={status}

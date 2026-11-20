@@ -38,8 +38,8 @@ function taskEvents(
       extendedProps: { taskId: item.id },
       ...(color && {
         borderColor: color,
-        backgroundColor: `color-mix(in srgb, ${color} 20%, white)`,
-        textColor: "#192338",
+        backgroundColor: `color-mix(in srgb, ${color} 20%, var(--paper))`,
+        textColor: "var(--foreground)",
       }),
     };
     const prefix = localStamp(anchor);
@@ -78,6 +78,7 @@ export function CalendarView({
   reschedule,
   position,
   onPositionChange,
+  expanded = false,
 }: {
   items: Item[];
   projects: ReadonlyMap<Id, Project>;
@@ -85,11 +86,12 @@ export function CalendarView({
   reschedule: (id: Id, changes: ItemChanges) => Promise<boolean>;
   position?: CalendarPosition;
   onPositionChange?: (position: CalendarPosition) => void;
+  expanded?: boolean;
 }) {
   return (
     <section
       aria-label="Calendario de tareas"
-      className="organify-calendar min-w-0 overflow-x-auto rounded-lg border border-line p-2 sm:p-3"
+      className={`organify-calendar min-w-0 overflow-x-auto rounded-lg border border-line p-2 sm:p-3 ${expanded ? "h-full" : ""}`}
     >
       <FullCalendar
         plugins={plugins}
@@ -113,7 +115,8 @@ export function CalendarView({
           right: "timeGridDay,timeGridWeek,dayGridMonth,listWeek",
         }}
         buttonText={views}
-        height="auto"
+        height={expanded ? "100%" : "auto"}
+        expandRows={expanded}
         dayMaxEvents
         eventDisplay="block"
         eventStartEditable

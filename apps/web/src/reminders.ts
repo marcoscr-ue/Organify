@@ -47,26 +47,29 @@ export async function scheduleReminder(taskId: string, at: number) {
     }
     if (display !== "granted")
       throw new Error("Permite las notificaciones en Android.");
-    const existing = readReminders()[taskId]?.nativeId;
-    const used = new Set(
-      Object.values(readReminders()).map((entry) => entry.nativeId),
-    );
-    let id = existing ?? 1;
-    if (!existing) {
-      while (used.has(id)) id++;
-    }
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          id,
-          title,
-          body,
-          schedule: { at: new Date(at) },
-          isExactNotification: false,
-        },
-      ],
+    await withReminderLock(async () => {
+      const reminders = readReminders();
+      const existing = reminders[taskId]?.nativeId;
+      const used = new Set(
+        Object.values(reminders).map((entry) => entry.nativeId),
+      );
+      let id = existing ?? 1;
+      if (!existing) {
+        while (used.has(id)) id++;
+      }
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id,
+            title,
+            body,
+            schedule: { at: new Date(at) },
+            isExactNotification: false,
+          },
+        ],
+      });
+      writeReminder(taskId, { at, nativeId: id });
     });
-    writeReminder(taskId, { at, nativeId: id });
     return;
   }
 
@@ -81,11 +84,25 @@ export async function scheduleReminder(taskId: string, at: number) {
 }
 
 export async function cancelReminder(taskId: string) {
-  const id = readReminders()[taskId]?.nativeId;
-  if (isAndroid && id !== undefined) {
-    await LocalNotifications.cancel({ notifications: [{ id }] });
-  }
-  await withReminderLock(() => writeReminder(taskId));
+  await cancelReminders([taskId]);
+}
+
+export async function cancelReminders(taskIds: readonly string[]) {
+  await withReminderLock(async () => {
+    const reminders = readReminders();
+    const scheduled = taskIds.filter((id) => Object.hasOwn(reminders, id));
+    if (!scheduled.length) return;
+    if (isAndroid) {
+      const notifications = scheduled.flatMap((taskId) => {
+        const id = reminders[taskId].nativeId;
+        return id === undefined ? [] : [{ id }];
+      });
+      if (notifications.length)
+        await LocalNotifications.cancel({ notifications });
+    }
+    for (const id of scheduled) delete reminders[id];
+    localStorage.setItem(storageKey, JSON.stringify(reminders));
+  });
 }
 
 async function deliverDueReminders(onDelivered: (taskId: string) => void) {

@@ -14,6 +14,8 @@ const paths = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7",
   reset: "M3 10a9 9 0 1 1 2 8M3 4v6h6",
   popout: "M13 4h7v7m0-7-9 9m6 0v7H4V7h7",
+  expand: "M12 3v18m-4-14 4-4 4 4m-8 10 4 4 4-4",
+  collapse: "M12 3v6m0 6v6M8 5l4 4 4-4m-8 14 4-4 4 4",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   filter: "M4 7h16M4 17h16M8 4v6m8 4v6",
   bell: "M9 20a3 3 0 0 0 6 0M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6Z",
