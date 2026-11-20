@@ -1,0 +1,13 @@
+{
+  "identifier": "window-controls",
+  "description": "Controles de la barra superior en la ventana principal de Windows",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

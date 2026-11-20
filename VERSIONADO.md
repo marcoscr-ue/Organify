@@ -1,6 +1,8 @@
 # Versionado de Organify
 
-La versión visible de la app (por ejemplo, 0.4.0) identifica la publicación. El protocolo de sincronización identifica el formato y significado de las operaciones que pueden intercambiar los clientes. Mantén alineadas las versiones de los paquetes de web, escritorio y móvil, la configuración de Tauri, el paquete Rust y el historial de versiones. Para distribuir en Android, actualiza también `versionName` y aumenta `versionCode` en el proyecto nativo generado.
+El protocolo de sincronización identifica el formato y significado de las operaciones que pueden intercambiar los clientes. En una release multiplataforma, alinea las versiones de los paquetes web, escritorio y móvil, Tauri, Cargo y el historial. Para distribuir en Android, actualiza también `versionName` y aumenta `versionCode` en el proyecto nativo generado.
+
+Los parches exclusivos de Windows pueden avanzar la versión técnica de escritorio. `Rust++0.7.0++a` se publica como `v0.7.1`, con `0.7.1` en Tauri, Cargo y el manifiesto de actualización. Android y PWA siguen en `0.7.0`. La release de Windows conserva el manifiesto de Android de la última release estable para mantener el mismo APK disponible.
 
 ## Cambios de sincronización
 

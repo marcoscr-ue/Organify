@@ -2,13 +2,33 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
+import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 
 const updated = (text: string) => ({ text, label: "Actualizado" as const });
 const improved = (text: string) => ({ text, label: "Mejorado" as const });
 
-const releases = [
+type Release = {
+  version: string;
+  date: string;
+  label?: string;
+  windowsOnly?: boolean;
+  changes: Array<ReturnType<typeof updated | typeof improved>>;
+};
+
+const releases: Release[] = [
+  {
+    version: "0.7.1",
+    date: "2026-11-20",
+    label: "Rust++0.7.0++a",
+    windowsOnly: true,
+    changes: [
+      improved(
+        "Los controles de ventana funcionan en la barra superior de Windows.",
+      ),
+    ],
+  },
   {
     version: "0.7.0",
     date: "2026-11-20",
@@ -204,19 +224,11 @@ function AppDialog({
   );
 }
 
-type Release = (typeof releases)[number];
 const releaseMonth = new Intl.DateTimeFormat("es-ES", {
   month: "long",
   year: "numeric",
   timeZone: "UTC",
 });
-const releasesByMonth = new Map<string, Release[]>();
-for (const release of releases) {
-  const key = release.date.slice(0, 7);
-  const entries = releasesByMonth.get(key) ?? [];
-  entries.push(release);
-  releasesByMonth.set(key, entries);
-}
 
 function ReleaseChanges({ release }: { release: Release }) {
   const changes = [
@@ -227,7 +239,9 @@ function ReleaseChanges({ release }: { release: Release }) {
   return (
     <>
       <header className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 className="font-semibold">Versión {release.version}</h3>
+        <h3 className="font-semibold">
+          Versión {release.label ?? release.version}
+        </h3>
         <time className="text-xs text-muted" dateTime={release.date}>
           {releaseDate.format(new Date(release.date))}
         </time>
@@ -265,7 +279,7 @@ function AutomaticReleaseNotes() {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [skip, setSkip] = useState(false);
-  const release = releases.find((entry) => entry.version === version);
+  const release = releases.find((entry) => entry.version === desktopVersion);
 
   useEffect(() => {
     const core = window.__TAURI__?.core;
@@ -333,15 +347,30 @@ function AutomaticReleaseNotes() {
 }
 
 export function ReleaseNotes() {
-  const platform = window.__TAURI__
+  const desktop = Boolean(window.__TAURI__);
+  const platform = desktop
     ? "Rust"
     : Capacitor.isNativePlatform()
       ? "Capacitor"
       : "PWA";
-  const versionLabel = `Versión ${platform}++${version}`;
+  const currentVersion = desktop ? desktopVersion : version;
+  const platformReleases = releases.filter(
+    (entry) => desktop || !entry.windowsOnly,
+  );
+  const displayVersion = platformReleases.find(
+    (entry) => entry.version === currentVersion,
+  )?.label;
+  const versionLabel = `Versión ${displayVersion ?? `${platform}++${currentVersion}`}`;
+  const releasesByMonth = new Map<string, Release[]>();
+  for (const release of platformReleases) {
+    const key = release.date.slice(0, 7);
+    const entries = releasesByMonth.get(key) ?? [];
+    entries.push(release);
+    releasesByMonth.set(key, entries);
+  }
   const history = useRef<HTMLDivElement>(null);
   const [activeVersion, setActiveVersion] = useState<string>(
-    releases[0].version,
+    platformReleases[0].version,
   );
 
   function updateActiveVersion() {
@@ -409,7 +438,7 @@ export function ReleaseNotes() {
                     }
                     onClick={() => scrollToVersion(entry.version)}
                   >
-                    {entry.version}
+                    {entry.label ?? entry.version}
                   </button>
                 ))}
               </section>
@@ -423,7 +452,7 @@ export function ReleaseNotes() {
             aria-label="Historial de cambios"
             className="relative overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-primary"
           >
-            {releases.map((release) => (
+            {platformReleases.map((release) => (
               <article
                 key={release.version}
                 data-version={release.version}
