@@ -1,8 +1,159 @@
-import { isSyncProtocolError } from "@organify/sync";
+import {
+  createKeyEnvelope,
+  createOpCodec,
+  unlockKey,
+  type KeyEnvelope,
+} from "@organify/crypto";
+import {
+  checkSyncProtocol,
+  createSyncClient,
+  isSyncProtocolError,
+  supabaseAdapter,
+  SyncEngine,
+} from "@organify/sync";
+import type { SavedDeviceUnlock, TaskRepositories } from "@organify/storage";
+import { openDeviceUnlock } from "./device-unlock";
 
 export interface SyncProject {
   url: string;
   publicKey: string;
+}
+
+export function createAccountClient(project: SyncProject) {
+  const storageKey = `organify:sync-session:${project.url}`;
+  const memory = new Map<string, string>();
+  let persistentStorage: Storage | undefined;
+  try {
+    persistentStorage = localStorage;
+    persistentStorage.getItem(storageKey);
+  } catch {
+    persistentStorage = undefined;
+  }
+  let rememberSession = Boolean(persistentStorage);
+  const api = createSyncClient(project.url, project.publicKey, {
+    detectSessionInUrl: false,
+    persistSession: true,
+    storageKey,
+    storage: {
+      getItem(key) {
+        return rememberSession
+          ? (persistentStorage?.getItem(key) ?? null)
+          : (memory.get(key) ?? null);
+      },
+      setItem(key, value) {
+        if (rememberSession) persistentStorage?.setItem(key, value);
+        else memory.set(key, value);
+      },
+      removeItem(key) {
+        if (rememberSession) persistentStorage?.removeItem(key);
+        else memory.delete(key);
+      },
+    },
+  });
+  return {
+    api,
+    projectUrl: project.url,
+    setRememberSession(remember: boolean) {
+      if (remember && !persistentStorage) {
+        throw new Error("Este dispositivo no permite guardar la sesión.");
+      }
+      if (!remember) persistentStorage?.removeItem(storageKey);
+      rememberSession = remember;
+    },
+  };
+}
+
+type SyncClient = ReturnType<typeof createSyncClient>;
+
+async function readKeyEnvelope(api: SyncClient, userId: string) {
+  await checkSyncProtocol(api);
+  const { data, error } = await api
+    .from("key_envelopes")
+    .select("envelope")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? (data.envelope as KeyEnvelope) : undefined;
+}
+
+function envelopeId(envelope: KeyEnvelope) {
+  return JSON.stringify([
+    envelope.v,
+    envelope.recovery.v,
+    envelope.recovery.nonce,
+    envelope.recovery.ciphertext,
+  ]);
+}
+
+function createEngine(
+  api: SyncClient,
+  store: TaskRepositories["sync"],
+  userId: string,
+  key: Uint8Array,
+) {
+  return new SyncEngine(
+    store,
+    supabaseAdapter(api, userId),
+    createOpCodec(userId, key),
+  );
+}
+
+export async function resumeSync(
+  api: SyncClient,
+  store: TaskRepositories["sync"],
+  saved: SavedDeviceUnlock,
+) {
+  const { data, error } = await api.auth.getUser();
+  if (error) throw error;
+  if (data.user.id !== saved.userId) {
+    throw new Error("El desbloqueo guardado pertenece a otra cuenta.");
+  }
+  const envelope = await readKeyEnvelope(api, saved.userId);
+  if (!envelope || envelopeId(envelope) !== saved.envelopeId) {
+    throw new Error("La clave de sincronización cambió.");
+  }
+  const key = await openDeviceUnlock(saved);
+  await store.bind(saved.userId);
+  return createEngine(api, store, saved.userId, key);
+}
+
+export async function unlockSync(
+  api: SyncClient,
+  store: TaskRepositories["sync"],
+  userId: string,
+  secret: string,
+  method: "passphrase" | "recovery",
+  initialize: boolean,
+) {
+  let envelope = await readKeyEnvelope(api, userId);
+  let key: Uint8Array;
+  let recoveryKey = "";
+  if (envelope) {
+    key = await unlockKey(userId, envelope, secret, method);
+    await store.bind(userId);
+  } else {
+    if (!initialize || method === "recovery") {
+      throw new Error(
+        "Esta cuenta aún no tiene clave. Marca la opción de primer dispositivo para crearla.",
+      );
+    }
+    await store.bind(userId);
+    const created = await createKeyEnvelope(userId, secret);
+    const { error: saveError } = await api
+      .from("key_envelopes")
+      .insert({ user_id: userId, envelope: created.envelope });
+    if (saveError) throw saveError;
+    key = created.key;
+    envelope = created.envelope;
+    recoveryKey = created.recoveryKey;
+  }
+
+  return {
+    engine: createEngine(api, store, userId, key),
+    key,
+    envelopeId: envelopeId(envelope),
+    recoveryKey,
+  };
 }
 
 export function readSyncProject(url: string, key: string): SyncProject {

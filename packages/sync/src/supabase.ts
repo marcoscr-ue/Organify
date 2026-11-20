@@ -1,11 +1,19 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type SupabaseClient,
+  type SupabaseClientOptions,
+} from "@supabase/supabase-js";
 import type { Entry, SyncAdapter } from "./engine";
 
 export const SYNC_PROTOCOL = 1;
 
-export function createSyncClient(url: string, publicKey: string) {
+export function createSyncClient(
+  url: string,
+  publicKey: string,
+  auth: SupabaseClientOptions<"public">["auth"] = { persistSession: false },
+) {
   return createClient(url, publicKey, {
-    auth: { persistSession: false },
+    auth,
   });
 }
 

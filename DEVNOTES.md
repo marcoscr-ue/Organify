@@ -164,7 +164,9 @@ Los datos se guardan en IndexedDB del navegador. Dexie queda encapsulado en `@or
 
 En un proyecto Supabase de pruebas, aplica las migraciones de `supabase/migrations` desde **SQL Editor**, primero `202611150001_sync.sql` y luego `202611160001_sync_protocol.sql`. Si el proyecto ya tenía sincronización, aplica solo las migraciones pendientes. En **Authentication → Users**, crea un usuario con correo y contraseña y configura la conexión desde **Cuenta** o mediante las variables descritas arriba.
 
-En **Sincronización**, conecta el primer dispositivo con una frase de cifrado distinta de la contraseña de acceso y de al menos 12 caracteres. Marca **Configurar el primer dispositivo** y guarda la clave de recuperación. En un segundo perfil de navegador, inicia sesión con la misma cuenta y desbloquea con la frase o la clave. Tras recargar, vuelve a desbloquear para activar la sincronización.
+En **Sincronización**, conecta el primer dispositivo con una frase de cifrado distinta de la contraseña de acceso y de al menos 12 caracteres. Marca **Configurar el primer dispositivo** y guarda la clave de recuperación. En un segundo perfil de navegador, inicia sesión con la misma cuenta y desbloquea con la frase o la clave.
+
+Para verificar el desbloqueo automático, marca **Mantener sesión iniciada** y **Recordar el desbloqueo en este dispositivo**, conecta y recarga. Comprueba que el indicador de Cuenta vuelve al estado verde. Pulsa **Olvidar desbloqueo** y recarga de nuevo. La sesión seguirá abierta y la app pedirá la frase o la clave de recuperación.
 
 Para probar la convergencia, desconecta ambos perfiles, cambia el título en uno y las notas en el otro, reconéctalos y comprueba ambos cambios desde un tercer perfil. La base local queda vinculada a la primera cuenta conectada. Usa otro perfil para otra cuenta. Las tareas siguen disponibles localmente sin red.
 

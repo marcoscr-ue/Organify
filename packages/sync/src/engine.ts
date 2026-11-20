@@ -39,7 +39,10 @@ export class SyncEngine {
     return this.running;
   }
 
-  start(reportError: (error: unknown) => void): () => void {
+  start(
+    reportError: (error: unknown) => void,
+    reportSuccess?: () => void,
+  ): () => void {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     let delay = 1000;
@@ -51,6 +54,7 @@ export class SyncEngine {
       try {
         await this.sync();
         delay = 1000;
+        if (!stopped) reportSuccess?.();
       } catch (error) {
         delay = Math.min(delay * 2, 60_000);
         if (!stopped) reportError(error);
@@ -64,6 +68,7 @@ export class SyncEngine {
     });
     void wake();
     return () => {
+      if (stopped) return;
       stopped = true;
       clearTimeout(timer);
       unsubscribe();
