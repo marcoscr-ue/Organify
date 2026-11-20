@@ -12,6 +12,8 @@ const paths = {
   edit: "m14 5 5 5M4 20l4-.8L20 7l-3-3L5 16l-1 4Z",
   save: "M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8",
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7",
+  reset: "M3 10a9 9 0 1 1 2 8M3 4v6h6",
+  popout: "M13 4h7v7m0-7-9 9m6 0v7H4V7h7",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   filter: "M4 7h16M4 17h16M8 4v6m8 4v6",
   bell: "M9 20a3 3 0 0 0 6 0M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6Z",

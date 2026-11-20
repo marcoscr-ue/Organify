@@ -211,6 +211,12 @@ function Editor({
       pressed: state?.code,
       run: () => editor.chain().focus().toggleCodeBlock().run(),
     },
+    {
+      label: "Vaciar descripción",
+      path: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7",
+      disabled: state?.empty,
+      run: () => editor.chain().focus().clearContent().run(),
+    },
   ];
   return (
     <div

@@ -1,7 +1,6 @@
 {
   "name": "@organify/desktop",
-  "version": "0.7.1",
-  "releaseLabel": "Rust++0.7.0++a",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "desktop:dev": "tauri dev",

@@ -6,6 +6,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.8.0 conserva el protocolo 1 y sigue intercambiando operaciones con la 0.7.x. Los cambios del editor usan las operaciones de campo y de descripción existentes. Se aplican las mismas migraciones de Supabase.
+
 - La 0.7.0 conserva el protocolo 1 y sincroniza con los clientes anteriores. Mantener la sesión iniciada guarda los tokens de Supabase en el dispositivo. El desbloqueo opcional usa IndexedDB en una base independiente de la de tareas y protege la clave maestra con una clave no exportable de Web Crypto. El formato local tiene su propia versión. Se aplican las mismas migraciones de Supabase.
 - La 0.5.1 conserva el protocolo 1 y envía su cabecera solo en las RPC de sincronización. Comparte servidor e historial cifrado con la 0.5.0 y requiere las mismas migraciones de Supabase.
 - La 0.5.0 conserva el protocolo 1. El nombre y el color de proyecto usan operaciones de campo independientes. Los clientes anteriores conservan el color en la réplica y pueden seguir sincronizando tareas. Al actualizar a la 0.5.0, Dexie recupera los colores ya recibidos.
