@@ -59,6 +59,7 @@ import {
 } from "./task-controls";
 import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
+import { RoutinesWorkspace } from "./routines";
 import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
 
 const repositories = createTaskRepositories();
@@ -556,6 +557,8 @@ export function App() {
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
+  const [showRoutines, setShowRoutines] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(true);
   const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
   const calendarPosition = useRef<CalendarPosition>(undefined);
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
@@ -613,8 +616,13 @@ export function App() {
   }, [floating]);
   useEffect(() => {
     if (floating?.kind === "task") return;
-    const clock = window.setInterval(() => setNow(Date.now()), 15_000);
-    return () => window.clearInterval(clock);
+    const refreshClock = () => setNow(Date.now());
+    const clock = window.setInterval(refreshClock, 15_000);
+    document.addEventListener("visibilitychange", refreshClock);
+    return () => {
+      window.clearInterval(clock);
+      document.removeEventListener("visibilitychange", refreshClock);
+    };
   }, [floating]);
   function openPalette() {
     if (!document.querySelector("dialog[open]")) {
@@ -636,11 +644,18 @@ export function App() {
   }, [floating]);
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
+    setShowRoutines(false);
+    if (!nextProject) setTasksOpen(true);
     if (layout === "calendar" && nextInbox !== "all") setLayout("list");
     setInbox(nextInbox);
     setTaskSearch("");
     setStatusFilter(undefined);
     setProjectId(nextProject);
+    setSelectedId(undefined);
+  }
+
+  function openRoutines() {
+    setShowRoutines(true);
     setSelectedId(undefined);
   }
 
@@ -766,26 +781,38 @@ export function App() {
         matchesInbox(item, activeInbox, today),
     ) ?? [];
   const projectById = new Map(projects.map((project) => [project.id, project]));
-  const heading = projectId
-    ? projectById.get(projectId)?.name
-    : inboxes.find(({ id }) => id === activeInbox)?.label;
-  const isToday = !projectId && activeInbox === "today";
+  const heading = showRoutines
+    ? "Rutinas"
+    : projectId
+      ? projectById.get(projectId)?.name
+      : inboxes.find(({ id }) => id === activeInbox)?.label;
+  const isToday = !showRoutines && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
     [
-      { label: "Capturar tarea", run: () => capture.current?.focus() },
+      {
+        label: "Capturar tarea",
+        run: () => {
+          setShowRoutines(false);
+          requestAnimationFrame(() => capture.current?.focus());
+        },
+      },
       {
         label: "Alternar modo claro y oscuro",
         run: () => changeTheme(!darkMode),
       },
       ...layouts.map(({ id, label }) => ({
         label: `Abrir ${label.toLocaleLowerCase("es")}`,
-        run: () => setLayout(id),
+        run: () => {
+          setShowRoutines(false);
+          setLayout(id);
+        },
       })),
       ...inboxes.map(({ id, label }) => ({
         label: `Ir a ${label}`,
         run: () => navigate(id),
       })),
+      { label: "Ir a Rutinas", run: openRoutines },
       ...projects.map(({ id, name }) => ({
         label: `Abrir proyecto ${name}`,
         run: () => navigate("all", id),
@@ -1034,30 +1061,56 @@ export function App() {
             </h2>
             <nav
               aria-labelledby="task-navigation-title"
-              className="grid min-w-0 grid-cols-2 gap-1 md:grid-cols-1"
+              className="grid min-w-0 content-start gap-1"
             >
-              {inboxes.map(({ id, label }) => (
-                <button
-                  type="button"
-                  key={id}
-                  aria-current={
-                    !projectId && activeInbox === id ? "page" : undefined
-                  }
-                  className="nav-link flex w-full min-w-0 items-center gap-2.5"
-                  onClick={() => navigate(id)}
-                >
+              <details
+                className="task-nav-group"
+                open={tasksOpen}
+                onToggle={(event) => setTasksOpen(event.currentTarget.open)}
+              >
+                <summary className="nav-link flex items-center gap-2.5">
+                  <InterfaceIcon name="list" />
+                  <span className="flex-1 font-semibold">Tareas</span>
                   <InterfaceIcon
-                    name={inboxIcons[id]}
-                    className="size-4 shrink-0"
+                    name="chevron"
+                    className="task-nav-chevron size-4"
                   />
-                  <span>{label}</span>
-                  {id === "today" && snapshot && (
-                    <span className="task-count ml-auto">
-                      {todayItems.length - doneToday}
-                    </span>
-                  )}
-                </button>
-              ))}
+                </summary>
+                <div className="grid grid-cols-2 gap-1 pl-3 md:grid-cols-1">
+                  {inboxes.map(({ id, label }) => (
+                    <button
+                      type="button"
+                      key={id}
+                      aria-current={
+                        !showRoutines && !projectId && activeInbox === id
+                          ? "page"
+                          : undefined
+                      }
+                      className="nav-link flex w-full min-w-0 items-center gap-2.5"
+                      onClick={() => navigate(id)}
+                    >
+                      <InterfaceIcon
+                        name={inboxIcons[id]}
+                        className="size-4 shrink-0"
+                      />
+                      <span>{label}</span>
+                      {id === "today" && snapshot && (
+                        <span className="task-count ml-auto">
+                          {todayItems.length - doneToday}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </details>
+              <button
+                type="button"
+                className="nav-link flex items-center gap-2.5"
+                aria-current={showRoutines ? "page" : undefined}
+                onClick={openRoutines}
+              >
+                <InterfaceIcon name="sparkles" /> Rutinas
+              </button>
             </nav>
           </div>
           <div className="grid gap-2">
@@ -1070,7 +1123,7 @@ export function App() {
                 <ProjectNavigation
                   key={project.id}
                   project={project}
-                  active={projectId === project.id}
+                  active={!showRoutines && projectId === project.id}
                   open={() => navigate("all", project.id)}
                   save={(changes) =>
                     repositories.projects.update(project.id, changes)
@@ -1161,7 +1214,36 @@ export function App() {
               </div>
             </section>
           )}
-          <section className="task-panel" aria-labelledby="task-panel-title">
+          {showRoutines &&
+            (snapshot ? (
+              <RoutinesWorkspace
+                mode="routines"
+                routines={snapshot.routines}
+                now={now}
+                store={repositories.routines}
+                openRoutines={openRoutines}
+              />
+            ) : (
+              <p className="text-sm text-muted" role="status">
+                {readError
+                  ? "No se pudieron cargar las rutinas."
+                  : "Cargando rutinas…"}
+              </p>
+            ))}
+          {snapshot && isToday && (
+            <RoutinesWorkspace
+              mode="today"
+              routines={snapshot.routines}
+              now={now}
+              store={repositories.routines}
+              openRoutines={openRoutines}
+            />
+          )}
+          <section
+            hidden={showRoutines}
+            className="task-panel"
+            aria-labelledby="task-panel-title"
+          >
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h2 id="task-panel-title" className="font-semibold">

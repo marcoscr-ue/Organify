@@ -8,11 +8,15 @@ import type {
   ProjectChanges,
   Status,
   Op,
+  Routine,
+  RoutineChanges,
+  RoutineInput,
 } from "@organify/core";
 
 export interface TaskSnapshot {
   items: Item[];
   projects: Project[];
+  routines: Routine[];
 }
 
 export interface SavedView {
@@ -26,6 +30,18 @@ export interface SavedView {
 }
 
 export interface TaskRepositories {
+  routines: {
+    create(input: RoutineInput): Promise<Id>;
+    update(id: Id, changes: RoutineChanges): Promise<void>;
+    setPaused(id: Id, paused: boolean): Promise<void>;
+    setStep(
+      id: Id,
+      cycle: string,
+      step: string,
+      checked: boolean,
+    ): Promise<void>;
+    remove(id: Id): Promise<void>;
+  };
   documents: {
     subscribe(
       id: Id,
