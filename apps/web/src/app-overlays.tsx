@@ -55,7 +55,7 @@ type Release = {
 const releases: Release[] = [
   {
     version: "0.10.0",
-    date: "2026-11-20",
+    date: "2026-11-21",
     changes: [
       introduced("Se ha publicado la primera iteración de las rutinas."),
       updated(
