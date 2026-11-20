@@ -4,6 +4,7 @@ import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
+import { DesktopSettings, desktopWindow } from "./desktop-windows";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 
 const updated = (text: string) => ({ text, label: "Actualizado" as const });
@@ -14,10 +15,40 @@ type Release = {
   date: string;
   label?: string;
   windowsOnly?: boolean;
-  changes: Array<ReturnType<typeof updated | typeof improved>>;
+  changes: Array<
+    ReturnType<typeof updated | typeof improved> & { windowsOnly?: boolean }
+  >;
 };
 
 const releases: Release[] = [
+  {
+    version: "0.8.0",
+    date: "2026-11-20",
+    changes: [
+      updated("Cambia entre Día, Semana, Mes y Agenda en el calendario."),
+      improved(
+        "Restaura el título o limpia los campos opcionales desde Editar tarea.",
+      ),
+      {
+        ...updated(
+          "Abre tareas, el Tablero y el Calendario en ventanas independientes.",
+        ),
+        windowsOnly: true,
+      },
+      {
+        ...updated(
+          "Elige en Ajustes si cerrar minimiza Organify para recibir recordatorios o sale por completo.",
+        ),
+        windowsOnly: true,
+      },
+      {
+        ...improved(
+          "La barra superior usa controles de ventana con el aspecto habitual de Windows.",
+        ),
+        windowsOnly: true,
+      },
+    ],
+  },
   {
     version: "0.7.1",
     date: "2026-11-20",
@@ -231,9 +262,12 @@ const releaseMonth = new Intl.DateTimeFormat("es-ES", {
 });
 
 function ReleaseChanges({ release }: { release: Release }) {
+  const visible = release.changes.filter(
+    ({ windowsOnly }) => !windowsOnly || desktopWindow,
+  );
   const changes = [
-    ...release.changes.filter(({ label }) => label === "Actualizado"),
-    ...release.changes.filter(({ label }) => label === "Mejorado"),
+    ...visible.filter(({ label }) => label === "Actualizado"),
+    ...visible.filter(({ label }) => label === "Mejorado"),
   ];
 
   return (
@@ -531,7 +565,11 @@ export function AppControls({ store }: { store: TaskRepositories["sync"] }) {
           </svg>
         }
       >
-        <p className="text-sm text-muted">Sección en desarrollo.</p>
+        {desktopWindow ? (
+          <DesktopSettings />
+        ) : (
+          <p className="text-sm text-muted">Sección en desarrollo.</p>
+        )}
       </AppDialog>
       <AppDialog
         title="Cuenta"

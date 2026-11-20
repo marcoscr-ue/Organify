@@ -1,5 +1,42 @@
+import type { ReactNode } from "react";
 import { statuses, type Item, type Project, type Status } from "@organify/core";
+import { InterfaceIcon } from "./interface-icon";
 import { isOverdue } from "./task-deadline";
+
+export function TaskField({
+  label,
+  resetLabel,
+  onReset,
+  disabled,
+  className = "",
+  children,
+}: {
+  label: string;
+  resetLabel: string;
+  onReset: () => void;
+  disabled: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`flex min-w-0 items-end gap-1 ${className}`}>
+      <label className="grid min-w-0 flex-1 gap-1 text-sm">
+        {label}
+        {children}
+      </label>
+      <button
+        type="button"
+        className="nav-link grid size-9 shrink-0 place-items-center p-0 disabled:opacity-40"
+        aria-label={resetLabel}
+        title={resetLabel}
+        disabled={disabled}
+        onClick={onReset}
+      >
+        <InterfaceIcon name="reset" />
+      </button>
+    </div>
+  );
+}
 
 export const statusLabels: Record<Status, string> = {
   todo: "Pendiente",

@@ -1,0 +1,7 @@
+{
+  "identifier": "floating-windows",
+  "description": "Cierre de ventanas independientes de Organify",
+  "windows": ["task-*", "view-*"],
+  "platforms": ["windows"],
+  "permissions": ["core:window:allow-close"]
+}

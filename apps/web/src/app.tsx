@@ -21,9 +21,16 @@ import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { Board } from "./board";
-import { CalendarView } from "./calendar-view";
+import { CalendarView, type CalendarPosition } from "./calendar-view";
 import { AppControls, CloseDialogButton, ReleaseNotes } from "./app-overlays";
 import { BlockNotes } from "./block-notes";
+import {
+  DesktopWindowControls,
+  FloatButton,
+  desktopWindow,
+  openFloatingView,
+  readFloatingView,
+} from "./desktop-windows";
 import {
   cancelReminder,
   isAndroid,
@@ -41,6 +48,7 @@ import {
   ProjectSelect,
   StatusSelect,
   statusLabels,
+  TaskField,
   TaskStatusIcon,
 } from "./task-controls";
 import { ProjectNavigation } from "./project-navigation";
@@ -96,6 +104,8 @@ function TaskDetail({
   remove,
   close,
   feedback,
+  float,
+  floating = false,
 }: {
   item: Item;
   projects: Project[];
@@ -104,6 +114,8 @@ function TaskDetail({
   remove: () => void;
   close: () => void;
   feedback: ReactNode;
+  float?: () => void;
+  floating?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -119,8 +131,10 @@ function TaskDetail({
   }>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [editing, setEditing] = useState(startEditing);
-  const [title, setTitle] = useState(item.title);
-  const [projectId, setProjectId] = useState(item.projectId ?? "");
+  const [title, setTitle] = useState<string>();
+  const [projectId, setProjectId] = useState<string>();
+  const selectedTitle = title ?? item.title;
+  const selectedProject = projectId ?? item.projectId ?? "";
   const scheduled = item.start ?? item.due;
   const local = scheduled ? localStamp(new Date(scheduled)) : "";
   const [date, setDate] = useState<string | undefined>();
@@ -180,8 +194,8 @@ function TaskDetail({
   }
 
   function changeMode(next: boolean) {
-    setTitle(item.title);
-    setProjectId(item.projectId ?? "");
+    setTitle(undefined);
+    setProjectId(undefined);
     setDate(undefined);
     setTime(undefined);
     setRecurrence(undefined);
@@ -192,7 +206,7 @@ function TaskDetail({
   }
 
   function dismiss() {
-    dialog.current?.close();
+    if (!floating) dialog.current?.close();
     close();
   }
 
@@ -215,18 +229,19 @@ function TaskDetail({
     }
     setSaving(true);
     try {
-      const scheduleEdited =
-        date !== undefined || time !== undefined || recurrence !== undefined;
+      const dateOrTimeEdited = date !== undefined || time !== undefined;
       const start = selectedDate
         ? new Date(selectedDate + "T" + (selectedTime || "00:00"))
         : undefined;
-      const schedule = scheduleEdited
+      const schedule = dateOrTimeEdited
         ? scheduleChanges(item, start, !selectedTime, selectedRecurrence)
-        : {};
+        : recurrence !== undefined
+          ? { recurrence: selectedRecurrence || undefined }
+          : {};
       if (
         !(await save({
-          title,
-          projectId: projectId || undefined,
+          ...(title !== undefined && { title }),
+          ...(projectId !== undefined && { projectId: projectId || undefined }),
           ...schedule,
         }))
       )
@@ -257,7 +272,11 @@ function TaskDetail({
     <dialog
       ref={dialog}
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(42rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-line bg-paper text-foreground shadow-xl backdrop:bg-black/35"
+      className={
+        floating
+          ? "m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto bg-paper text-foreground"
+          : "m-auto max-h-[calc(100dvh-2rem)] w-[min(42rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-line bg-paper text-foreground shadow-xl backdrop:bg-black/35"
+      }
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
@@ -265,9 +284,10 @@ function TaskDetail({
       }}
     >
       <div
-        className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-line bg-paper px-5 py-4 sm:cursor-grab sm:select-none"
+        className={`sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-line bg-paper px-5 py-4 ${floating ? "" : "sm:cursor-grab sm:select-none"}`}
         onPointerDown={(event) => {
           if (
+            floating ||
             event.pointerType !== "mouse" ||
             event.button !== 0 ||
             (event.target as Element).closest("button")
@@ -319,7 +339,17 @@ function TaskDetail({
             </div>
           )}
         </div>
-        <CloseDialogButton onClick={dismiss} disabled={saving} />
+        <div className="flex shrink-0 items-center gap-1">
+          {!editing && float && (
+            <FloatButton
+              label="Abrir tarea en una ventana independiente"
+              onClick={float}
+            />
+          )}
+          {!floating && (
+            <CloseDialogButton onClick={dismiss} disabled={saving} />
+          )}
+        </div>
       </div>
       <div className="p-5">
         {feedback}
@@ -329,35 +359,56 @@ function TaskDetail({
             className="grid grid-cols-1 gap-3 sm:grid-cols-2"
             onSubmit={submit}
           >
-            <label className="grid gap-1 text-sm sm:col-span-2">
-              Título
+            <TaskField
+              label="Título"
+              resetLabel="Restaurar título guardado"
+              onReset={() => setTitle(undefined)}
+              disabled={selectedTitle === item.title || saving}
+              className="sm:col-span-2"
+            >
               <input
                 ref={titleInput}
                 className="field"
-                value={title}
+                value={selectedTitle}
                 required
                 onChange={(event) => setTitle(event.target.value)}
               />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Proyecto
+            </TaskField>
+            <TaskField
+              label="Proyecto"
+              resetLabel="Quitar proyecto"
+              onReset={() => setProjectId("")}
+              disabled={!selectedProject || saving}
+            >
               <ProjectSelect
-                value={projectId}
+                value={selectedProject}
                 onChange={setProjectId}
                 projects={projects}
               />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Fecha
+            </TaskField>
+            <TaskField
+              label="Fecha"
+              resetLabel="Quitar fecha"
+              onReset={() => {
+                setDate("");
+                setTime("");
+                setRecurrence("");
+              }}
+              disabled={!selectedDate || saving}
+            >
               <input
                 type="date"
                 className="field min-w-0"
                 value={selectedDate}
                 onChange={(event) => setDate(event.target.value)}
               />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Hora (opcional)
+            </TaskField>
+            <TaskField
+              label="Hora (opcional)"
+              resetLabel="Quitar hora"
+              onReset={() => setTime("")}
+              disabled={!selectedDate || !selectedTime || saving}
+            >
               <input
                 type="time"
                 className="field min-w-0"
@@ -365,9 +416,13 @@ function TaskDetail({
                 disabled={!selectedDate}
                 onChange={(event) => setTime(event.target.value)}
               />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Repetición
+            </TaskField>
+            <TaskField
+              label="Repetición"
+              resetLabel="Quitar repetición"
+              onReset={() => setRecurrence("")}
+              disabled={!selectedDate || !selectedRecurrence || saving}
+            >
               <select
                 className="field min-w-0"
                 disabled={!selectedDate}
@@ -380,7 +435,7 @@ function TaskDetail({
                   </option>
                 ))}
               </select>
-            </label>
+            </TaskField>
             {selectedDate && selectedRecurrence && (
               <p className="text-sm text-muted sm:col-span-2">
                 Los cambios se aplican a toda la serie.
@@ -396,8 +451,15 @@ function TaskDetail({
         />
         {editing ? (
           <div className="mt-4 grid gap-2 border-t border-line pt-4 text-sm">
-            <label className="grid gap-1">
-              Recordatorio en este dispositivo
+            <TaskField
+              label="Recordatorio en este dispositivo"
+              resetLabel="Quitar recordatorio"
+              disabled={!(reminderDraft ?? currentReminder) || saving}
+              onReset={() => {
+                setReminderDraft("");
+                setReminderError("");
+              }}
+            >
               <input
                 className="field min-w-0"
                 type="datetime-local"
@@ -406,17 +468,7 @@ function TaskDetail({
                 onChange={(event) => setReminderDraft(event.target.value)}
                 disabled={saving}
               />
-            </label>
-            {(reminderDraft ?? currentReminder) && (
-              <button
-                type="button"
-                className="nav-link justify-self-start"
-                disabled={saving}
-                onClick={() => setReminderDraft("")}
-              >
-                Quitar recordatorio
-              </button>
-            )}
+            </TaskField>
             <p className="text-muted">
               {isAndroid
                 ? "Android puede retrasar el aviso para ahorrar batería."
@@ -493,22 +545,32 @@ function TaskDetail({
 }
 
 export function App() {
+  const [floating] = useState(readFloatingView);
+  const [openingView, setOpeningView] = useState(false);
+  const calendarPosition = useRef<CalendarPosition>(undefined);
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
   const [readError, setReadError] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [inbox, setInbox] = useState<Inbox>("today");
-  const [projectId, setProjectId] = useState<Id>();
-  const [layout, setLayout] = useState<Layout>("list");
-  const [selectedId, setSelectedId] = useState<Id>();
+  const floatingTasks = floating?.kind !== "task" ? floating : undefined;
+  const [inbox, setInbox] = useState<Inbox>(floatingTasks?.inbox ?? "today");
+  const [projectId, setProjectId] = useState<Id | undefined>(
+    floatingTasks?.projectId,
+  );
+  const [layout, setLayout] = useState<Layout>(floatingTasks?.kind ?? "list");
+  const [selectedId, setSelectedId] = useState<Id | undefined>(
+    floating?.kind === "task" ? floating.id : undefined,
+  );
   const [startEditing, setStartEditing] = useState(false);
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [taskSearch, setTaskSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Status>();
+  const [taskSearch, setTaskSearch] = useState(floatingTasks?.search ?? "");
+  const [statusFilter, setStatusFilter] = useState<Status | undefined>(
+    floatingTasks?.status,
+  );
   const [query, setQuery] = useState("");
   const [reminderAlert, setReminderAlert] = useState<Id>();
   const capture = useRef<HTMLInputElement>(null);
@@ -519,11 +581,14 @@ export function App() {
     [],
   );
 
-  useEffect(() => watchReminders(setReminderAlert), []);
   useEffect(() => {
+    if (!floating) return watchReminders(setReminderAlert);
+  }, [floating]);
+  useEffect(() => {
+    if (floating?.kind === "task") return;
     const clock = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => window.clearInterval(clock);
-  }, []);
+  }, [floating]);
   function openPalette() {
     if (!document.querySelector("dialog[open]")) {
       setQuery("");
@@ -532,6 +597,7 @@ export function App() {
   }
 
   useEffect(() => {
+    if (floating) return;
     function shortcut(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -540,7 +606,7 @@ export function App() {
     }
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, []);
+  }, [floating]);
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
     if (layout === "calendar" && nextInbox !== "all") setLayout("list");
@@ -564,7 +630,26 @@ export function App() {
       await cancelReminder(item.id);
       await repositories.items.remove(item.id);
     }, "Tarea eliminada.");
-    if (removed) setSelectedId((id) => (id === item.id ? undefined : id));
+    if (removed && floating?.kind === "task") void closeFloatingTask();
+    else if (removed) setSelectedId((id) => (id === item.id ? undefined : id));
+  }
+
+  async function closeFloatingTask() {
+    try {
+      await desktopWindow?.close();
+    } catch {
+      setError("No se pudo cerrar la ventana.");
+    }
+  }
+
+  async function floatTask(item: Item, fromDetail = false) {
+    const opened = await write(
+      () => openFloatingView({ kind: "task", id: item.id }, item.title),
+      "",
+    );
+    if (opened && fromDetail) {
+      setSelectedId((id) => (id === item.id ? undefined : id));
+    }
   }
 
   async function write(
@@ -681,10 +766,128 @@ export function App() {
     </>
   );
 
+  async function floatLayout() {
+    if (openingView || (layout !== "board" && layout !== "calendar")) return;
+    setOpeningView(true);
+    try {
+      await write(
+        () =>
+          openFloatingView({
+            kind: layout,
+            inbox: activeInbox,
+            projectId,
+            status: statusFilter,
+            search: taskSearch,
+            position:
+              layout === "calendar" ? calendarPosition.current : undefined,
+          }),
+        "",
+      );
+    } finally {
+      setOpeningView(false);
+    }
+  }
+
+  const taskDetail = selected && (
+    <TaskDetail
+      key={selected.id}
+      item={selected}
+      projects={projects}
+      startEditing={startEditing}
+      feedback={feedback}
+      save={(changes) =>
+        write(
+          () => repositories.items.update(selected.id, changes),
+          "Tarea guardada.",
+        )
+      }
+      remove={() => void removeTask(selected)}
+      close={() => {
+        if (floating?.kind === "task") void closeFloatingTask();
+        else setSelectedId(undefined);
+      }}
+      floating={floating?.kind === "task"}
+      float={
+        desktopWindow && floating?.kind !== "task"
+          ? () => void floatTask(selected, true)
+          : undefined
+      }
+    />
+  );
+
+  const viewLoading = readError ? (
+    <p role="alert" className="text-sm text-danger">
+      No se pudieron leer las tareas guardadas.
+    </p>
+  ) : (
+    !snapshot && <p className="text-sm text-muted">Cargando tareas…</p>
+  );
+
+  const boardOrCalendar = snapshot && (
+    <>
+      {layout === "board" && (
+        <Board
+          items={visible}
+          projects={projectById}
+          now={now}
+          open={openTask}
+          move={move}
+        />
+      )}
+      {layout === "calendar" && (
+        <CalendarView
+          items={visible}
+          projects={projectById}
+          open={openTask}
+          reschedule={(id, changes) =>
+            write(
+              () => repositories.items.update(id, changes),
+              "Tarea reprogramada.",
+            )
+          }
+          position={floatingTasks?.position}
+          onPositionChange={(position) => {
+            calendarPosition.current = position;
+          }}
+        />
+      )}
+    </>
+  );
+
+  if (floating?.kind === "task") {
+    return (
+      taskDetail ?? (
+        <main className="p-5">
+          {feedback}
+          {viewLoading}
+          {snapshot && !readError && (
+            <p className="text-sm text-muted">
+              Esta tarea ya no está disponible.
+            </p>
+          )}
+        </main>
+      )
+    );
+  }
+
+  if (floatingTasks) {
+    return (
+      <main className="min-h-svh p-4">
+        <h1 className="mb-3 text-lg font-semibold">{heading}</h1>
+        {!selected && feedback}
+        {viewLoading}
+        {boardOrCalendar}
+        {taskDetail}
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-svh">
       <div className="app-shell">
-        <header className="app-topbar">
+        <header
+          className={`app-topbar ${desktopWindow ? "app-topbar-desktop" : ""}`}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted">
             <span className="hidden sm:inline">Espacio de trabajo</span>
             <span aria-hidden="true" className="hidden sm:inline">
@@ -694,7 +897,7 @@ export function App() {
               {heading ?? "Tareas"}
             </span>
           </div>
-          {window.__TAURI__?.window && (
+          {desktopWindow && (
             <div
               aria-hidden="true"
               data-tauri-drag-region
@@ -713,8 +916,8 @@ export function App() {
               <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
             <AppControls store={repositories.sync} />
-            <DesktopWindowControls />
           </div>
+          {desktopWindow && <DesktopWindowControls />}
         </header>
         <aside className="app-sidebar">
           <img
@@ -941,6 +1144,13 @@ export function App() {
                   </button>
                 ))}
               </div>
+              {desktopWindow && layout !== "list" && (
+                <FloatButton
+                  label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
+                  onClick={() => void floatLayout()}
+                  disabled={openingView}
+                />
+              )}
               <label className="search-field">
                 <InterfaceIcon name="search" />
                 <input
@@ -954,38 +1164,10 @@ export function App() {
               </label>
             </div>
             {!selected && feedback}
-            {readError && (
-              <p role="alert" className="text-sm text-danger">
-                No se pudieron leer las tareas guardadas en este navegador.
-              </p>
-            )}
-            {!snapshot && !readError && (
-              <p className="text-sm text-muted">Cargando tareas…</p>
-            )}
+            {viewLoading}
 
             <div className="min-w-0">
-              {snapshot && layout === "board" && (
-                <Board
-                  items={visible}
-                  projects={projectById}
-                  now={now}
-                  open={openTask}
-                  move={move}
-                />
-              )}
-              {snapshot && layout === "calendar" && (
-                <CalendarView
-                  items={visible}
-                  projects={projectById}
-                  open={openTask}
-                  reschedule={(id, changes) =>
-                    write(
-                      () => repositories.items.update(id, changes),
-                      "Tarea reprogramada.",
-                    )
-                  }
-                />
-              )}
+              {boardOrCalendar}
               {snapshot &&
                 layout === "list" &&
                 (visible.length ? (
@@ -1067,6 +1249,19 @@ export function App() {
                                 <InterfaceIcon name="edit" />
                                 Editar tarea
                               </button>
+                              {desktopWindow && (
+                                <button
+                                  type="button"
+                                  className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                  onClick={(event) => {
+                                    closeDisclosure(event.currentTarget);
+                                    void floatTask(item);
+                                  }}
+                                >
+                                  <InterfaceIcon name="popout" />
+                                  Abrir en ventana
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
@@ -1094,23 +1289,7 @@ export function App() {
         </main>
       </div>
 
-      {selected && (
-        <TaskDetail
-          key={selected.id}
-          item={selected}
-          projects={projects}
-          startEditing={startEditing}
-          feedback={feedback}
-          save={(changes) =>
-            write(
-              () => repositories.items.update(selected.id, changes),
-              "Tarea guardada.",
-            )
-          }
-          remove={() => void removeTask(selected)}
-          close={() => setSelectedId(undefined)}
-        />
-      )}
+      {taskDetail}
 
       {reminderAlert && (
         <div className="fixed right-4 bottom-4 z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
@@ -1175,52 +1354,6 @@ export function App() {
           <p className="text-sm text-muted">No hay comandos que coincidan.</p>
         )}
       </dialog>
-    </div>
-  );
-}
-
-function DesktopWindowControls() {
-  const current = window.__TAURI__?.window?.getCurrentWindow();
-  if (!current) return null;
-  const buttons = [
-    { label: "Minimizar", text: "−", run: () => current.minimize() },
-    {
-      label: "Maximizar o restaurar",
-      text: "□",
-      run: () => current.toggleMaximize(),
-    },
-    {
-      label: "Cerrar",
-      text: "×",
-      run: () => current.close(),
-      danger: true,
-    },
-  ];
-  return (
-    <div
-      role="group"
-      aria-label="Controles de ventana"
-      className="ml-2 flex h-9 shrink-0 border-l border-line pl-2"
-    >
-      {buttons.map(({ label, text, run, danger }) => (
-        <button
-          key={label}
-          type="button"
-          aria-label={label}
-          title={label}
-          onClick={() => {
-            void run().catch((error: unknown) =>
-              console.error(
-                `No se pudo ejecutar ${label.toLowerCase()}.`,
-                error,
-              ),
-            );
-          }}
-          className={`grid h-full w-8 place-items-center rounded-md text-base text-foreground focus-visible:outline-2 focus-visible:outline-primary ${danger ? "hover:bg-danger hover:text-white" : "hover:bg-panel"}`}
-        >
-          {text}
-        </button>
-      ))}
     </div>
   );
 }

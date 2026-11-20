@@ -184,6 +184,12 @@ Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique
 
 Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo.
 
+### Probar las ventanas independientes de Windows
+
+Abre dos tareas con **Abrir en ventana** desde la lista o desde el detalle. Edita una tarea en su ventana y comprueba el cambio en la lista principal. Prueba también el botón desde **Tablero** y **Calendario** con un proyecto seleccionado. El Calendario independiente abre en la fecha y vista que estabas consultando.
+
+En una instalación de Windows, programa un recordatorio y elige **Minimizar y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece y que puedes restaurar la ventana desde la barra de tareas. Selecciona **Salir de Organify** y comprueba que la X cierra también las ventanas independientes.
+
 ## Fase 5 · Descripción en bloques
 
 Después de actualizar `dev`, ejecuta `corepack pnpm install` y guarda el
