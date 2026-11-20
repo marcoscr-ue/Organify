@@ -135,9 +135,11 @@ Ejecuta **Actions → Publicar Multiplataforma → Run workflow** desde la rama 
 
 En Actions también están **Publicar Windows**, **Publicar Android** y **Publicar PWA**. Cada uno compila únicamente esa plataforma y adjunta sus archivos al borrador `v<versión>`. Puedes ejecutar varios para completar el mismo borrador desde el mismo commit. La publicación final sigue siendo manual. PWA genera un ZIP listo para alojar; el workflow no despliega el sitio.
 
-Para una corrección nueva, incrementa la versión global aunque solo distribuyas una plataforma. Mantén alineados los paquetes web, desktop y mobile, Tauri, Cargo y el historial como indica VERSIONADO.md. Los workflows rechazan una release ya publicada y una etiqueta que apunta a otro commit; no sustituyas archivos de una versión que los usuarios ya instalaron.
+Para un parche exclusivo de Windows, incrementa la versión en el paquete desktop, Tauri y Cargo y ejecuta **Publicar Windows**. El borrador usa la versión superior de Windows y conserva el `android.json` de la última release publicada. Comprueba que el borrador contiene el instalador firmado, `latest.json` con la versión de Windows y `android.json` con el enlace al APK anterior. Publícalo como release estable y selecciónalo como **Latest release** para que lo detecten los clientes existentes. El campo `releaseLabel` del paquete desktop establece el nombre visible del parche en GitHub.
 
-**Límite de los actualizadores:** Windows y Android consultan `releases/latest/download`. Si la última release publicada contiene solo una plataforma, el actualizador de la otra no encontrará su manifiesto. Las apps siguen funcionando, pero no podrán descubrir esa actualización desde ese enlace. Para mantener disponibles ambos actualizadores, publica Windows y Android en la misma release. No marques una release parcial como la última si necesitas que el enlace `latest` siga apuntando a una release completa; comprueba la opción de GitHub antes de publicarla. Las prereleases tampoco se descubren mediante ese enlace.
+Para la siguiente release común, alinea los paquetes web, desktop y mobile, Tauri y Cargo con una versión superior a la de Windows. Los workflows rechazan una release ya publicada y una etiqueta que apunta a otro commit.
+
+Windows y Android consultan `releases/latest/download`. Conserva `latest.json` y `android.json` en la release marcada como **Latest release** para que ambos puedan detectar actualizaciones. Las prereleases quedan fuera de ese enlace.
 
 ## Qué reconstruir cuando cambia la app
 
