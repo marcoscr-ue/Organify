@@ -21,7 +21,7 @@ const releases: Release[] = [
   {
     version: "0.7.1",
     date: "2026-11-20",
-    label: "Rust++0.7.0++a",
+    label: "0.7.1-Windows",
     windowsOnly: true,
     changes: [
       improved(
