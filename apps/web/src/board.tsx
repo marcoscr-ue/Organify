@@ -73,6 +73,7 @@ function Card({
   return (
     <li
       ref={setNodeRef}
+      data-task-shortcut={isDragging ? undefined : item.id}
       className={`relative flex flex-wrap items-start gap-2 rounded-lg border border-line bg-paper p-3 shadow-xs ${isDragging ? "z-10" : ""}`}
       style={{
         transform: transform

@@ -15,11 +15,21 @@ import {
 } from "@organify/core";
 import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
-import { CloseDialogButton, DeleteConfirmation } from "./app-overlays";
+import {
+  CloseDialogButton,
+  DeleteConfirmation,
+  RenameDialog,
+} from "./app-overlays";
 import { InterfaceIcon } from "./interface-icon";
+import {
+  useWorkspaceShortcuts,
+  type ShortcutBindings,
+} from "./workspace-shortcuts";
 
 type Progress = ReturnType<typeof routineProgress>;
 type RoutineEntry = Progress & { routine: Routine };
+type RoutineAction =
+  { type: "create" } | { type: "edit" | "rename" | "delete"; id: string };
 
 const frequencyLabel = { daily: "Diaria", weekly: "Semanal" };
 const dateFormat = new Intl.DateTimeFormat("es-ES", {
@@ -326,6 +336,7 @@ function RoutineDetail({
   check,
   pause,
   edit,
+  rename,
   remove,
   close,
 }: {
@@ -335,6 +346,7 @@ function RoutineDetail({
   check: (id: string, checked: boolean) => void;
   pause: () => void;
   edit: () => void;
+  rename: () => void;
   remove: () => void;
   close: () => void;
 }) {
@@ -423,6 +435,13 @@ function RoutineDetail({
         <Button
           className="border border-control-line bg-paper text-foreground hover:bg-panel"
           disabled={busy}
+          onClick={rename}
+        >
+          Renombrar
+        </Button>
+        <Button
+          className="border border-control-line bg-paper text-foreground hover:bg-panel"
+          disabled={busy}
           onClick={pause}
         >
           {pausePending
@@ -453,16 +472,17 @@ export function RoutinesWorkspace({
   now,
   store,
   openRoutines,
+  bindings,
 }: {
   mode: "today" | "routines";
   routines: Routine[];
   now: number;
   store: TaskRepositories["routines"];
   openRoutines: () => void;
+  bindings?: ShortcutBindings;
 }) {
   const [selectedId, setSelectedId] = useState<string>();
-  const [editor, setEditor] = useState<"create" | "edit">();
-  const [deleting, setDeleting] = useState(false);
+  const [action, setAction] = useState<RoutineAction>();
   const [expanded, setExpanded] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -480,6 +500,31 @@ export function RoutinesWorkspace({
     (a, b) => Number(a.cycle.complete) - Number(b.cycle.complete),
   );
   const selected = entries.find(({ routine }) => routine.id === selectedId);
+  const actionEntry = entries.find(
+    ({ routine }) =>
+      action && action.type !== "create" && routine.id === action.id,
+  );
+
+  function openAction(next: RoutineAction) {
+    setError("");
+    setAction(next);
+  }
+
+  useWorkspaceShortcuts(bindings, (shortcut) => {
+    if (busy) return;
+    if (shortcut === "create") {
+      if (mode !== "routines") return;
+      openAction({ type: "create" });
+      return true;
+    }
+    const hovered = document.querySelector<HTMLElement>(
+      "[data-routine-shortcut]:hover",
+    );
+    const id = hovered?.dataset.routineShortcut;
+    if (!id || !entries.some(({ routine }) => routine.id === id)) return;
+    openAction({ type: shortcut, id });
+    return true;
+  });
 
   async function write(operation: () => Promise<unknown>) {
     setError("");
@@ -512,10 +557,65 @@ export function RoutinesWorkspace({
     setSelectedId(undefined);
   }
 
-  function closeEditor() {
+  function closeAction() {
     setError("");
-    setEditor(undefined);
+    setAction(undefined);
   }
+
+  const dialogs = (
+    <>
+      {(action?.type === "create" ||
+        (action?.type === "edit" && actionEntry)) && (
+        <RoutineEditor
+          key={actionEntry?.routine.id ?? "create"}
+          entry={actionEntry}
+          busy={busy}
+          error={error}
+          close={closeAction}
+          save={async (input, original) => {
+            const { name, ...schedule } = input;
+            const changedSchedule =
+              schedule.frequency !== original.frequency ||
+              JSON.stringify(schedule.steps) !== JSON.stringify(original.steps);
+            if (
+              await write(() =>
+                actionEntry
+                  ? store.update(actionEntry.routine.id, {
+                      name: name === original.name ? undefined : name,
+                      schedule: changedSchedule ? schedule : undefined,
+                    })
+                  : store.create(input),
+              )
+            )
+              closeAction();
+          }}
+        />
+      )}
+      {action?.type === "rename" && actionEntry && (
+        <RenameDialog
+          key={actionEntry.routine.id}
+          title="Renombrar rutina"
+          name={actionEntry.routine.name}
+          close={closeAction}
+          save={(name) => store.update(actionEntry.routine.id, { name })}
+        />
+      )}
+      {action?.type === "delete" && actionEntry && (
+        <DeleteConfirmation
+          title="Eliminar rutina"
+          confirmLabel="Eliminar rutina"
+          onCancel={closeAction}
+          onConfirm={async () => {
+            await store.remove(actionEntry.routine.id);
+            closeAction();
+            if (actionEntry.routine.id === selectedId) closeDetail();
+          }}
+        >
+          Se eliminará «{actionEntry.routine.name}» y su historial.
+        </DeleteConfirmation>
+      )}
+    </>
+  );
 
   if (mode === "today") {
     if (!active.length) return null;
@@ -547,7 +647,11 @@ export function RoutinesWorkspace({
             const { routine, cycle } = entry;
             const open = expanded === routine.id;
             return (
-              <li key={routine.id} className="border-t border-line">
+              <li
+                key={routine.id}
+                data-routine-shortcut={routine.id}
+                className="border-t border-line"
+              >
                 <button
                   type="button"
                   className="today-routine-toggle"
@@ -585,6 +689,7 @@ export function RoutinesWorkspace({
             {error}
           </p>
         )}
+        {dialogs}
       </section>
     );
   }
@@ -605,12 +710,7 @@ export function RoutinesWorkspace({
             el ciclo actual
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setError("");
-            setEditor("create");
-          }}
-        >
+        <Button onClick={() => openAction({ type: "create" })}>
           <InterfaceIcon name="plus" /> Nueva rutina
         </Button>
       </div>
@@ -621,6 +721,7 @@ export function RoutinesWorkspace({
               key={routine.id}
               type="button"
               className="routine-card"
+              data-routine-shortcut={routine.id}
               onClick={() => {
                 setError("");
                 setSelectedId(routine.id);
@@ -677,53 +778,13 @@ export function RoutinesWorkspace({
               store.setPaused(selected.routine.id, !selected.nextPaused),
             );
           }}
-          edit={() => {
-            setError("");
-            setEditor("edit");
-          }}
-          remove={() => setDeleting(true)}
+          edit={() => openAction({ type: "edit", id: selected.routine.id })}
+          rename={() => openAction({ type: "rename", id: selected.routine.id })}
+          remove={() => openAction({ type: "delete", id: selected.routine.id })}
           close={closeDetail}
         />
       )}
-      {(editor === "create" || (editor === "edit" && selected)) && (
-        <RoutineEditor
-          entry={editor === "edit" ? selected : undefined}
-          busy={busy}
-          error={error}
-          close={closeEditor}
-          save={async (input, original) => {
-            const { name, ...schedule } = input;
-            const changedSchedule =
-              schedule.frequency !== original.frequency ||
-              JSON.stringify(schedule.steps) !== JSON.stringify(original.steps);
-            if (
-              await write(() =>
-                editor === "edit" && selected
-                  ? store.update(selected.routine.id, {
-                      name: name === original.name ? undefined : name,
-                      schedule: changedSchedule ? schedule : undefined,
-                    })
-                  : store.create(input),
-              )
-            )
-              closeEditor();
-          }}
-        />
-      )}
-      {deleting && selected && (
-        <DeleteConfirmation
-          title="Eliminar rutina"
-          confirmLabel="Eliminar rutina"
-          onCancel={() => setDeleting(false)}
-          onConfirm={async () => {
-            await store.remove(selected.routine.id);
-            setDeleting(false);
-            closeDetail();
-          }}
-        >
-          Se eliminará «{selected.routine.name}» y su historial.
-        </DeleteConfirmation>
-      )}
+      {dialogs}
     </section>
   );
 }

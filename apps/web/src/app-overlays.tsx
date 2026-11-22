@@ -13,7 +13,9 @@ import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
 import { DesktopSettings, desktopWindow } from "./desktop-windows";
 import { InterfaceIcon } from "./interface-icon";
+import { ShortcutSettings } from "./shortcut-settings";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
+import type { WorkspacePreferences } from "./workspace-shortcuts";
 
 const introduced = (text: string) => ({ text, kind: "new" as const });
 const updated = (text: string) => ({ text, kind: "updated" as const });
@@ -53,6 +55,19 @@ type Release = {
 };
 
 const releases: Release[] = [
+  {
+    version: "0.12.0",
+    date: "2026-11-22",
+    changes: [
+      introduced(
+        "En PWA y Windows, usa E, R y D sobre tareas y rutinas, y N para crear en la pestaña activa. Personaliza las teclas desde Ajustes.",
+      ),
+      introduced(
+        "En móvil, activa el gesto de deslizar hacia la derecha para borrar tareas desde la lista.",
+      ),
+      improved("Ajustes organiza las opciones en un menú lateral."),
+    ],
+  },
   {
     version: "0.11.0",
     date: "2026-11-22",
@@ -378,6 +393,95 @@ export function DeleteConfirmation({
           {busy ? "Borrando…" : confirmLabel}
         </Button>
       </div>
+    </dialog>
+  );
+}
+
+export function RenameDialog({
+  title,
+  name,
+  close,
+  save,
+}: {
+  title: string;
+  name: string;
+  close: () => void;
+  save: (name: string) => Promise<unknown>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [draft, setDraft] = useState(name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useLayoutEffect(() => {
+    const modal = dialog.current;
+    modal?.showModal();
+    return () => modal?.close();
+  }, []);
+
+  return (
+    <dialog
+      ref={dialog}
+      aria-labelledby={titleId}
+      className={`${dialogClass} w-[min(28rem,calc(100%-2rem))]`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!saving) close();
+      }}
+    >
+      <div className={dialogHeaderClass}>
+        <h2 id={titleId} className="text-lg font-semibold">
+          {title}
+        </h2>
+        <CloseDialogButton onClick={close} disabled={saving} />
+      </div>
+      <form
+        className="grid gap-4 p-5"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const next = draft.trim();
+          if (!next || saving) return;
+          setError("");
+          setSaving(true);
+          try {
+            if (next !== name) await save(next);
+            close();
+          } catch (cause) {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "No se pudo guardar el nombre.",
+            );
+            setSaving(false);
+          }
+        }}
+      >
+        <label className="grid gap-1 text-sm">
+          Nombre
+          <input
+            autoFocus
+            onFocus={(event) => event.currentTarget.select()}
+            className="field"
+            value={draft}
+            required
+            disabled={saving}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+        <Button
+          type="submit"
+          className="justify-self-end"
+          disabled={!draft.trim() || saving}
+        >
+          Guardar
+        </Button>
+      </form>
     </dialog>
   );
 }
@@ -718,17 +822,23 @@ export function AppControls({
   store,
   darkMode,
   onThemeChange,
+  preferences,
 }: {
   store: TaskRepositories["sync"];
   darkMode: boolean;
   onThemeChange: (dark: boolean) => void;
+  preferences: WorkspacePreferences;
 }) {
   const [status, setStatus] = useState<SyncStatus>("inactive");
+  const [settings, setSettings] = useState<"general" | "shortcuts">("general");
+  const showShortcuts =
+    preferences.keyboardShortcuts && settings === "shortcuts";
   const accountLabel = `Cuenta. ${syncStatusLabel[status]}`;
   return (
     <>
       <AppDialog
         title="Ajustes"
+        wide
         triggerClass={iconButtonClass}
         trigger={
           <svg
@@ -749,19 +859,68 @@ export function AppControls({
           </svg>
         }
       >
-        <div className="grid gap-4">
-          <label className="grid gap-1 text-sm">
-            Tema
-            <select
-              className="field"
-              value={darkMode ? "dark" : "light"}
-              onChange={(event) => onThemeChange(event.target.value === "dark")}
+        <div className="grid h-[min(27rem,calc(100dvh-6rem))] min-h-0 grid-cols-[minmax(5rem,26%)_minmax(0,1fr)]">
+          <nav
+            aria-label="Secciones de ajustes"
+            className="space-y-1 overflow-y-auto border-r border-line bg-panel px-2 py-3 sm:p-4"
+          >
+            <button
+              type="button"
+              className="nav-link w-full text-xs sm:text-sm"
+              aria-current={!showShortcuts || undefined}
+              onClick={() => setSettings("general")}
             >
-              <option value="light">Modo claro</option>
-              <option value="dark">Modo oscuro</option>
-            </select>
-          </label>
-          {desktopWindow && <DesktopSettings />}
+              General
+            </button>
+            {preferences.keyboardShortcuts && (
+              <button
+                type="button"
+                className="nav-link w-full text-xs sm:text-sm"
+                aria-current={showShortcuts || undefined}
+                onClick={() => setSettings("shortcuts")}
+              >
+                Atajos de teclado
+              </button>
+            )}
+          </nav>
+          <div className="overflow-y-auto overscroll-contain p-4 sm:p-6">
+            <h3 className="mb-4 text-lg font-semibold">
+              {showShortcuts ? "Atajos de teclado" : "General"}
+            </h3>
+            {showShortcuts ? (
+              <ShortcutSettings {...preferences} />
+            ) : (
+              <div className="grid gap-4">
+                <label className="grid gap-1 text-sm">
+                  Tema
+                  <select
+                    className="field"
+                    value={darkMode ? "dark" : "light"}
+                    onChange={(event) =>
+                      onThemeChange(event.target.value === "dark")
+                    }
+                  >
+                    <option value="light">Modo claro</option>
+                    <option value="dark">Modo oscuro</option>
+                  </select>
+                </label>
+                {desktopWindow && <DesktopSettings />}
+                {preferences.mobile && (
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 accent-primary"
+                      checked={preferences.swipeToDelete}
+                      onChange={(event) =>
+                        preferences.changeSwipe(event.target.checked)
+                      }
+                    />
+                    Deslizar hacia la derecha para borrar tareas en la lista
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </AppDialog>
       <AppDialog
