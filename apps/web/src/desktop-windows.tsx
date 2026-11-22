@@ -52,7 +52,10 @@ export function readFloatingView(): FloatingView | undefined {
     return {
       kind,
       inbox:
-        inbox === "today" || inbox === "upcoming" || inbox === "undated"
+        inbox === "today" ||
+        inbox === "in-progress" ||
+        inbox === "upcoming" ||
+        inbox === "undated"
           ? inbox
           : "all",
       projectId: params.get("project") || undefined,

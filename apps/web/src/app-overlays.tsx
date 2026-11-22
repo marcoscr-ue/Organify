@@ -56,11 +56,23 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.13.0",
+    date: "2026-11-22",
+    changes: [
+      introduced(
+        "Añade una duración estimada y registra manualmente el tiempo empleado en cada tarea.",
+      ),
+      introduced(
+        "En curso muestra las tareas pendientes cuyo horario previsto está activo.",
+      ),
+    ],
+  },
+  {
     version: "0.12.0",
     date: "2026-11-22",
     changes: [
       introduced(
-        "En PWA y Windows, usa E, R y D sobre tareas y rutinas, y N para crear en la pestaña activa. Personaliza las teclas desde Ajustes.",
+        "En Web y Windows, usa E, R y D sobre tareas y rutinas, y N para crear en la pestaña activa. Personaliza las teclas desde Ajustes.",
       ),
       introduced(
         "En móvil, activa el gesto de deslizar hacia la derecha para borrar tareas desde la lista.",
@@ -735,7 +747,7 @@ export function ReleaseNotes() {
         <div className="grid h-[min(36rem,calc(100dvh-6rem))] min-h-0 grid-cols-[minmax(5rem,26%)_minmax(0,1fr)]">
           <nav
             aria-label="Versiones por mes"
-            className="overflow-y-auto overscroll-contain border-r border-line bg-panel px-2 py-3 sm:p-4"
+            className="release-version-nav overflow-y-auto overscroll-contain border-r border-line bg-panel px-2 py-3 sm:p-4"
           >
             {[...releasesByMonth].map(([key, entries]) => (
               <section key={key} className="mb-4 grid gap-1">

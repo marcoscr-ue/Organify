@@ -5,9 +5,19 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
-import { rrulestr } from "rrule";
-import type { Id, Item, ItemChanges, Project } from "@organify/core";
-import { localStamp, scheduleChanges, shiftSeries } from "./calendar-schedule";
+import {
+  taskDuration,
+  type Id,
+  type Item,
+  type ItemChanges,
+  type Project,
+} from "@organify/core";
+import {
+  localStamp,
+  scheduleChanges,
+  shiftSeries,
+  taskRecurrence,
+} from "./calendar-schedule";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin];
 const views = {
@@ -29,6 +39,16 @@ function taskEvents(
     const date = item.start ?? item.due;
     if (!date) return [];
     const anchor = new Date(date);
+    const minutes =
+      item.start && !item.allDay
+        ? taskDuration(item, "estimatedMinutes")
+        : undefined;
+    const duration = (minutes ?? 0) * 60_000;
+    const eventEnd = (start: Date) => {
+      if (!duration) return;
+      const end = new Date(start.getTime() + duration);
+      if (Number.isFinite(end.getTime())) return end;
+    };
     const color = item.projectId
       ? projects.get(item.projectId)?.color
       : undefined;
@@ -49,6 +69,7 @@ function taskEvents(
           ...event,
           id: item.id,
           start: item.allDay ? prefix.slice(0, 10) : date,
+          end: eventEnd(anchor),
         },
       ];
     }
@@ -56,16 +77,20 @@ function taskEvents(
     // rrule operates on UTC fields. Use local wall-clock values to keep a
     // recurring task at the same local time when daylight saving changes.
     const floating = (date: Date) => new Date(localStamp(date) + "Z");
-    const dtstart = prefix.replace(/[-:]/g, "");
-    const rule = rrulestr(`DTSTART:${dtstart}\nRRULE:${item.recurrence}`);
+    const rule = taskRecurrence(anchor, item.recurrence);
+    // Include occurrences that start before the view and finish inside it.
+    const earliest = new Date(
+      Math.max(anchor.getTime(), start.getTime() - duration),
+    );
     return rule
-      .between(floating(start), floating(end), true)
+      .between(floating(earliest), floating(end), true)
       .map((occurrence) => {
         const local = occurrence.toISOString().slice(0, 19);
         return {
           ...event,
           id: `${item.id}/${local}`,
           start: item.allDay ? local.slice(0, 10) : local,
+          end: eventEnd(new Date(local)),
         };
       });
   });
