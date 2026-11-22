@@ -10,6 +10,8 @@ import {
 } from "react";
 import {
   matchesInbox,
+  taskDuration,
+  taskDurationFields,
   type Id,
   type Inbox,
   type Item,
@@ -45,6 +47,7 @@ import {
   watchReminders,
 } from "./reminders";
 import {
+  latestTaskStart,
   localStamp,
   repeatOptions,
   scheduleChanges,
@@ -71,6 +74,7 @@ import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 const repositories = createTaskRepositories();
 const inboxes: { id: Inbox; label: string }[] = [
   { id: "today", label: "Hoy" },
+  { id: "in-progress", label: "En curso" },
   { id: "all", label: "Todas" },
   { id: "upcoming", label: "Próximas" },
   { id: "undated", label: "Sin fecha" },
@@ -78,9 +82,14 @@ const inboxes: { id: Inbox; label: string }[] = [
 const inboxIcons = {
   all: "inbox",
   today: "sun",
+  "in-progress": "clock",
   upcoming: "calendar",
   undated: "clock",
 } as const;
+const taskDurationLabels = {
+  estimatedMinutes: "Duración estimada",
+  spentMinutes: "Tiempo empleado",
+};
 const layouts = [
   { id: "list", label: "Lista", icon: "list" },
   { id: "board", label: "Tablero", icon: "board" },
@@ -101,8 +110,10 @@ function closeDisclosure(target: HTMLElement) {
   disclosure?.removeAttribute("open");
 }
 
-function dateLabel(item: Item): string | undefined {
-  const date = item.start ?? item.due;
+function dateLabel(
+  item: Item,
+  date = item.start ?? item.due,
+): string | undefined {
   if (!date) return;
   return new Intl.DateTimeFormat("es", {
     dateStyle: "medium",
@@ -154,6 +165,9 @@ function TaskDetail({
   const [date, setDate] = useState<string | undefined>();
   const [time, setTime] = useState<string | undefined>();
   const [recurrence, setRecurrence] = useState<string | undefined>();
+  const [durationDraft, setDurationDraft] = useState<
+    Partial<Record<(typeof taskDurationFields)[number], string>>
+  >({});
   const selectedDate = date ?? local.slice(0, 10);
   const selectedTime = time ?? (item.allDay ? "" : local.slice(11, 16));
   const selectedRecurrence = recurrence ?? item.recurrence ?? "";
@@ -213,6 +227,7 @@ function TaskDetail({
     setDate(undefined);
     setTime(undefined);
     setRecurrence(undefined);
+    setDurationDraft({});
     setReminderDraft(undefined);
     setReminderError("");
     setPosition({ x: 0, y: 0 });
@@ -252,11 +267,18 @@ function TaskDetail({
         : recurrence !== undefined
           ? { recurrence: selectedRecurrence || undefined }
           : {};
+      const durations: ItemChanges = {};
+      for (const field of taskDurationFields) {
+        const value = durationDraft[field];
+        if (value !== undefined)
+          durations[field] = value ? Number(value) : undefined;
+      }
       if (
         !(await save({
           ...(title !== undefined && { title }),
           ...(projectId !== undefined && { projectId: projectId || undefined }),
           ...schedule,
+          ...durations,
         }))
       )
         return;
@@ -350,6 +372,15 @@ function TaskDetail({
                 </span>
               )}
               <span>{statusLabels[item.status]}</span>
+              {taskDurationFields.map((field) => {
+                const minutes = taskDuration(item, field);
+                return minutes === undefined ? null : (
+                  <span key={field} className="inline-flex items-center gap-1">
+                    <InterfaceIcon name="clock" />
+                    {taskDurationLabels[field]}: {minutes} min
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -455,6 +486,33 @@ function TaskDetail({
                 Los cambios se aplican a toda la serie.
               </p>
             )}
+            {taskDurationFields.map((field) => {
+              const value =
+                durationDraft[field] ?? taskDuration(item, field) ?? "";
+              const change = (value: string) =>
+                setDurationDraft((draft) => ({ ...draft, [field]: value }));
+              return (
+                <TaskField
+                  key={field}
+                  label={taskDurationLabels[field] + " (min)"}
+                  resetLabel={`Quitar ${taskDurationLabels[field].toLowerCase()}`}
+                  disabled={value === "" || saving}
+                  onReset={() => change("")}
+                >
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="field min-w-0"
+                    min={field === "estimatedMinutes" ? 1 : 0}
+                    max={Number.MAX_SAFE_INTEGER}
+                    step={1}
+                    value={value}
+                    disabled={saving}
+                    onChange={(event) => change(event.target.value)}
+                  />
+                </TaskField>
+              );
+            })}
           </form>
         )}
         <BlockNotes
@@ -800,7 +858,15 @@ export function App() {
         item.title
           .toLocaleLowerCase("es")
           .includes(taskSearch.trim().toLocaleLowerCase("es")) &&
-        matchesInbox(item, activeInbox, today),
+        matchesInbox(
+          item,
+          activeInbox,
+          today,
+          activeInbox === "in-progress" &&
+            taskDuration(item, "estimatedMinutes")
+            ? latestTaskStart(item, today)
+            : item.start,
+        ),
     ) ?? [];
   const swipeEnabled = preferences.mobile && preferences.swipeToDelete;
   const swipeHandlers = useTaskSwipe(swipeEnabled, (id) => {
@@ -1449,7 +1515,10 @@ export function App() {
                         ? projectById.get(item.projectId)
                         : undefined;
                       const done = item.status === "done";
-                      const date = dateLabel(item);
+                      const date =
+                        activeInbox === "in-progress"
+                          ? dateLabel(item, latestTaskStart(item, today))
+                          : dateLabel(item);
                       return (
                         <li
                           key={item.id}

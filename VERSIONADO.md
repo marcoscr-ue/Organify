@@ -6,6 +6,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.13.0 guarda la duración estimada y el tiempo empleado con dos operaciones de propiedad de tarea independientes (`prop:estimatedMinutes` y `prop:spentMinutes`). Los clientes anteriores ya conservan estas propiedades en las tareas y pueden seguir editando y sincronizando los campos que conocen. La vista En curso se calcula en cliente. Se mantienen el protocolo 1, el esquema de IndexedDB y las migraciones de Supabase.
+
 - La 0.10.0 conserva el protocolo 1 y el esquema de IndexedDB. Rutinas guarda cambios cifrados con operaciones de campo `item` sobre identificadores reservados `routine/<uuid>`, con un campo independiente por ciclo y paso. Los clientes anteriores conservan estas operaciones en el diario y siguen sincronizando tareas y proyectos. Tras actualizar, el cliente reconstruye las rutinas a partir del diario local, incluso si esas operaciones se descargaron antes de actualizar. Se aplican las mismas migraciones de Supabase.
 
 - La 0.9.0 conserva el protocolo 1. El borrado múltiple registra una operación de borrado existente por tarea en una transacción local. Los clientes anteriores pueden aplicar esas operaciones con las mismas migraciones de Supabase.
