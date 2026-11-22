@@ -136,6 +136,11 @@ export function CalendarView({
           const taskId: unknown = event.extendedProps.taskId;
           if (typeof taskId === "string") open(taskId);
         }}
+        eventDidMount={({ el, event, isMirror }) => {
+          const taskId: unknown = event.extendedProps.taskId;
+          if (!isMirror && typeof taskId === "string")
+            el.dataset.taskShortcut = taskId;
+        }}
         eventDrop={async ({ event, oldEvent, revert }) => {
           const item = items.find(
             ({ id }) => id === event.extendedProps.taskId,
