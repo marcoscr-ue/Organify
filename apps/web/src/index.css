@@ -362,3 +362,11 @@ dialog::backdrop {
 .block-note a {
   @apply text-primary underline;
 }
+/* Hide the release version rail scrollbar while keeping the list scrollable. */
+.release-version-nav {
+  scrollbar-width: none;
+}
+
+.release-version-nav::-webkit-scrollbar {
+  display: none;
+}

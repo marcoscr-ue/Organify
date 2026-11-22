@@ -16,6 +16,8 @@ import {
   isRoutineSchedule,
   routineDate,
   routineProgress,
+  taskDuration,
+  taskDurationFields,
   tickHlc,
 } from "@organify/core";
 import {
@@ -399,6 +401,18 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           if ("recurrence" in changes) item.recurrence = changes.recurrence;
           await db.items.put(item);
           await record(db, "item", item, previous);
+          for (const field of taskDurationFields) {
+            if (!(field in changes)) continue;
+            const value = changes[field];
+            if (value === taskDuration(previous, field)) continue;
+            const op = await recordField(
+              db,
+              id,
+              propertyPrefix + field,
+              value ?? null,
+            );
+            await materialize(db, op, await mergeReplica(db, op));
+          }
         });
       },
       setProperty(id, name, value) {

@@ -36,17 +36,51 @@ export function isProjectColor(value: unknown): value is string {
 }
 
 export type NewItem = Pick<Item, "title" | "projectId" | "start" | "allDay">;
+export const taskDurationFields = ["estimatedMinutes", "spentMinutes"] as const;
+type TaskDurationField = (typeof taskDurationFields)[number];
+
+export function taskDuration(
+  item: Pick<Item, "props">,
+  field: TaskDurationField,
+) {
+  const value = item.props[field];
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= (field === "estimatedMinutes" ? 1 : 0)
+    ? value
+    : undefined;
+}
+
 export type ItemChanges = Partial<
   Pick<
     Item,
     "title" | "notes" | "projectId" | "start" | "due" | "allDay" | "recurrence"
   >
->;
+> &
+  Partial<Record<TaskDurationField, number | undefined>>;
 
-export type Inbox = "all" | "today" | "upcoming" | "undated";
+export type Inbox = "all" | "today" | "in-progress" | "upcoming" | "undated";
 
-export function matchesInbox(item: Item, inbox: Inbox, now: Date): boolean {
+export function matchesInbox(
+  item: Item,
+  inbox: Inbox,
+  now: Date,
+  scheduledStart = item.start,
+): boolean {
   if (inbox === "all") return true;
+  if (inbox === "in-progress") {
+    const duration = taskDuration(item, "estimatedMinutes");
+    if (
+      !scheduledStart ||
+      !duration ||
+      item.allDay ||
+      item.status === "done" ||
+      item.deletedAt
+    )
+      return false;
+    const elapsed = now.getTime() - Date.parse(scheduledStart);
+    return elapsed >= 0 && elapsed < duration * 60_000;
+  }
   const date = item.start ?? item.due;
   if (!date) return inbox === "undated";
   if (inbox === "undated") return false;
