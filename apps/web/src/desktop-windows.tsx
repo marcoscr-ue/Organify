@@ -10,7 +10,6 @@ declare global {
         getCurrentWindow: () => {
           label: string;
           isMaximized: () => Promise<boolean>;
-          minimize: () => Promise<void>;
           toggleMaximize: () => Promise<void>;
           close: () => Promise<void>;
         };
@@ -132,9 +131,14 @@ export function DesktopWindowControls() {
     };
   }, []);
   const current = desktopWindow;
-  if (!current) return null;
+  const tauri = window.__TAURI__;
+  if (!current || !tauri) return null;
   const buttons = [
-    { label: "Minimizar", path: "M0 5h10", run: () => current.minimize() },
+    {
+      label: "Minimizar a la bandeja del sistema",
+      path: "M0 5h10",
+      run: () => tauri.core.invoke("minimize_to_tray"),
+    },
     {
       label: maximized ? "Restaurar" : "Maximizar",
       path: maximized ? "M2 2V0h8v8H8M0 2h8v8H0z" : "M0 0h10v10H0z",
@@ -217,7 +221,7 @@ export function DesktopSettings() {
         >
           <option value="quit">Salir de Organify</option>
           <option value="minimize">
-            Minimizar y seguir recibiendo recordatorios
+            Ocultar en la bandeja y seguir recibiendo recordatorios
           </option>
         </select>
       </label>

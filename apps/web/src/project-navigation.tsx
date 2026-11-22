@@ -74,6 +74,7 @@ export function ProjectNavigation({
       onMouseLeave={() => setHovered(false)}
       onKeyDown={(event) => {
         if (menuOpen && event.key === "Escape") {
+          event.preventDefault();
           setMenuOpen(false);
           trigger.current?.focus();
         }
@@ -103,7 +104,7 @@ export function ProjectNavigation({
           aria-label={`Opciones de ${project.name}`}
           aria-expanded={menuOpen}
           aria-controls={menuId}
-          className="nav-link grid size-8 shrink-0 place-items-center p-0 [@media(hover:hover)]:opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 aria-expanded:opacity-100"
+          className="nav-link grid size-11 shrink-0 place-items-center p-0 md:size-8 md:[@media(hover:hover)]:opacity-0 group-hover/project:opacity-100 group-focus-within/project:opacity-100 aria-expanded:opacity-100"
           onClick={() => setMenuOpen(!menuOpen)}
         >
           <svg
