@@ -188,7 +188,9 @@ Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dis
 
 Abre dos tareas con **Abrir en ventana** desde la lista o desde el detalle. Edita una tarea en su ventana y comprueba el cambio en la lista principal. Prueba también el botón desde **Tablero** y **Calendario** con un proyecto seleccionado. El Calendario independiente abre en la fecha y vista que estabas consultando.
 
-En una instalación de Windows, programa un recordatorio y elige **Minimizar y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece y que puedes restaurar la ventana desde la barra de tareas. Selecciona **Salir de Organify** y comprueba que la X cierra también las ventanas independientes.
+Pulsa **Minimizar a la bandeja del sistema** y comprueba que la ventana principal desaparece de la barra de tareas. Busca el icono de Organify en el área de notificación de Windows, también accesible desde **Mostrar iconos ocultos**. Comprueba que puedes restaurar la ventana con un clic en el icono o con **Abrir Organify** en su menú contextual.
+
+En una instalación de Windows, programa un recordatorio y elige **Ocultar en la bandeja y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece mientras está oculta. Prueba que **Salir de Organify** en el menú de la bandeja cierra la app, incluidas sus ventanas independientes. Comprueba también que la X sale por completo al elegir **Salir de Organify** en Ajustes.
 
 ## Probar Rutinas
 

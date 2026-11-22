@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager,
+};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -36,6 +40,61 @@ fn minimize_on_close(app: tauri::AppHandle, enabled: Option<bool>) -> Result<boo
 #[tauri::command]
 fn quit_organify(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+#[tauri::command]
+fn minimize_to_tray(window: tauri::Window) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Solo se puede ocultar la ventana principal en la bandeja.".into());
+    }
+    window.hide().map_err(|error| error.to_string())
+}
+
+fn restore_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show()?;
+        if window.is_minimized()? {
+            window.unminimize()?;
+        }
+        window.set_focus()?;
+    }
+    Ok(())
+}
+
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Abrir Organify", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Salir de Organify", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+    let mut tray = TrayIconBuilder::new()
+        .tooltip("Organify")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => {
+                if let Err(error) = restore_main_window(app) {
+                    eprintln!("No se pudo abrir Organify: {error}");
+                }
+            }
+            "quit" => quit_organify(app.clone()),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Err(error) = restore_main_window(tray.app_handle()) {
+                    eprintln!("No se pudo abrir Organify: {error}");
+                }
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -166,8 +225,8 @@ fn main() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 if background_preference(window.app_handle()).is_ok_and(|path| path.is_file()) {
-                    if let Err(error) = window.minimize() {
-                        eprintln!("No se pudo minimizar Organify: {error}");
+                    if let Err(error) = window.hide() {
+                        eprintln!("No se pudo ocultar Organify en la bandeja: {error}");
                     }
                 } else {
                     window.app_handle().exit(0);
@@ -175,6 +234,7 @@ fn main() {
             }
         })
         .setup(|app| {
+            setup_tray(app)?;
             if !cfg!(debug_assertions) && app.config().plugins.0.contains_key("updater") {
                 let handle = app.handle().clone();
                 handle.plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -190,6 +250,7 @@ fn main() {
             show_reminder,
             pending_release_notes,
             minimize_on_close,
+            minimize_to_tray,
             quit_organify,
             open_floating_window
         ])

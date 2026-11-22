@@ -54,6 +54,22 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.11.0",
+    date: "2026-11-22",
+    changes: [
+      improved("El campo de búsqueda por título de las tareas es más ancho."),
+      improved(
+        "En móvil, abre Tareas, Rutinas y Proyectos desde el menú lateral del encabezado.",
+      ),
+      {
+        ...updated(
+          "Minimiza Organify a la bandeja del sistema y vuelve a abrirlo desde su icono.",
+        ),
+        windowsOnly: true,
+      },
+    ],
+  },
+  {
     version: "0.10.0",
     date: "2026-11-21",
     changes: [
@@ -470,7 +486,7 @@ function ReleaseChanges({ release }: { release: Release }) {
 
 const skipUpdateNotesKey = "organify.hide-automatic-release-notes";
 
-function AutomaticReleaseNotes() {
+export function AutomaticReleaseNotes() {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [skip, setSkip] = useState(false);
@@ -594,7 +610,6 @@ export function ReleaseNotes() {
 
   return (
     <>
-      <AutomaticReleaseNotes />
       <AppDialog
         title="Notas de lanzamiento"
         label={`${versionLabel}. Ver notas de lanzamiento`}

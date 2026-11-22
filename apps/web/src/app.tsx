@@ -19,14 +19,13 @@ import {
 } from "@organify/core";
 import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
 import { Button } from "@/components/ui/button";
-import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { Board } from "./board";
 import { CalendarView, type CalendarPosition } from "./calendar-view";
 import {
   AppControls,
+  AutomaticReleaseNotes,
   CloseDialogButton,
   DeleteConfirmation,
-  ReleaseNotes,
 } from "./app-overlays";
 import { BlockNotes } from "./block-notes";
 import {
@@ -61,6 +60,7 @@ import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
 import { RoutinesWorkspace } from "./routines";
 import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
+import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 
 const repositories = createTaskRepositories();
 const inboxes: { id: Inbox; label: string }[] = [
@@ -554,6 +554,8 @@ function TaskDetail({
 
 export function App() {
   const [floating] = useState(readFloatingView);
+  const compactNavigation = useCompactNavigation();
+  const navigation = useRef<HTMLDialogElement>(null);
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
@@ -580,6 +582,7 @@ export function App() {
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [projectCreationFailed, setProjectCreationFailed] = useState(false);
   const [taskSearch, setTaskSearch] = useState(floatingTasks?.search ?? "");
   const [statusFilter, setStatusFilter] = useState<Status | undefined>(
     floatingTasks?.status,
@@ -644,6 +647,7 @@ export function App() {
   }, [floating]);
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
+    navigation.current?.close();
     setShowRoutines(false);
     if (!nextProject) setTasksOpen(true);
     if (layout === "calendar" && nextInbox !== "all") setLayout("list");
@@ -655,6 +659,7 @@ export function App() {
   }
 
   function openRoutines() {
+    navigation.current?.close();
     setShowRoutines(true);
     setSelectedId(undefined);
   }
@@ -746,10 +751,12 @@ export function App() {
     event.preventDefault();
     if (creatingProject || !projectName.trim()) return;
     setCreatingProject(true);
+    setProjectCreationFailed(false);
     const created = await write(async () => {
       navigate("all", await repositories.projects.create(projectName));
     }, "Proyecto creado.");
     if (created) setProjectName("");
+    else setProjectCreationFailed(true);
     setCreatingProject(false);
   }
 
@@ -1008,19 +1015,43 @@ export function App() {
 
   return (
     <div className="min-h-svh">
+      <AutomaticReleaseNotes />
       <div className="app-shell">
         <header
           className={`app-topbar ${desktopWindow ? "app-topbar-desktop" : ""}`}
         >
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted">
-            <span className="hidden sm:inline">Espacio de trabajo</span>
-            <span aria-hidden="true" className="hidden sm:inline">
-              /
-            </span>
-            <span className="break-all font-semibold text-foreground">
-              {heading ?? "Tareas"}
-            </span>
+          <div className="flex min-w-0 items-center gap-2.5 md:flex-wrap md:gap-x-2 md:gap-y-0">
+            {compactNavigation && (
+              <button
+                type="button"
+                aria-label="Abrir menú de navegación"
+                aria-haspopup="dialog"
+                aria-controls="mobile-navigation"
+                className="topbar-button size-11 shrink-0"
+                onClick={() => navigation.current?.showModal()}
+              >
+                <InterfaceIcon name="menu" className="size-5" />
+              </button>
+            )}
+            <div className="hidden min-w-0 items-center gap-2 text-xs text-muted md:flex md:flex-wrap">
+              <span className="hidden md:inline">Espacio de trabajo</span>
+              <span aria-hidden="true" className="hidden md:inline">
+                /
+              </span>
+              <span className="truncate text-sm font-semibold text-foreground md:text-xs md:break-all md:whitespace-normal">
+                {heading ?? "Tareas"}
+              </span>
+            </div>
           </div>
+          {compactNavigation && (
+            <img
+              src="/organify-favicon.png"
+              alt="Organify"
+              width={32}
+              height={32}
+              className="mobile-brand-icon pointer-events-none absolute left-1/2 size-8 -translate-x-1/2 object-contain md:hidden"
+            />
+          )}
           {desktopWindow && (
             <div
               aria-hidden="true"
@@ -1035,7 +1066,7 @@ export function App() {
               className="topbar-button gap-2 px-2.5"
               aria-label="Comandos"
             >
-              <InterfaceIcon name="search" />
+              <InterfaceIcon name="terminal" />
               <span className="hidden sm:inline">Comandos</span>
               <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
@@ -1047,14 +1078,7 @@ export function App() {
           </div>
           {desktopWindow && <DesktopWindowControls />}
         </header>
-        <aside className="app-sidebar">
-          <img
-            src={sidebarLogo}
-            alt="Organify"
-            width={2172}
-            height={724}
-            className="sidebar-logo h-auto w-36 object-contain md:mb-3 md:w-full md:max-w-53"
-          />
+        <WorkspaceSidebar compact={compactNavigation} drawer={navigation}>
           <div className="grid gap-2">
             <h2 id="task-navigation-title" className="sidebar-label">
               Espacio de trabajo
@@ -1076,7 +1100,7 @@ export function App() {
                     className="task-nav-chevron size-4"
                   />
                 </summary>
-                <div className="grid grid-cols-2 gap-1 pl-3 md:grid-cols-1">
+                <div className="grid gap-1 pl-3">
                   {inboxes.map(({ id, label }) => (
                     <button
                       type="button"
@@ -1115,10 +1139,7 @@ export function App() {
           </div>
           <div className="grid gap-2">
             <h2 className="sidebar-label">Proyectos</h2>
-            <nav
-              aria-label="Proyectos"
-              className="flex min-w-0 flex-wrap gap-1 md:grid"
-            >
+            <nav aria-label="Proyectos" className="grid min-w-0 gap-1">
               {projects.map((project) => (
                 <ProjectNavigation
                   key={project.id}
@@ -1132,13 +1153,16 @@ export function App() {
               ))}
             </nav>
             <form
-              className="flex min-w-0 max-w-56 gap-1"
+              className="flex min-w-0 gap-1 md:max-w-56"
               onSubmit={createProject}
             >
               <input
                 className="field min-w-0 flex-1"
                 value={projectName}
-                onChange={(event) => setProjectName(event.target.value)}
+                onChange={(event) => {
+                  setProjectName(event.target.value);
+                  setProjectCreationFailed(false);
+                }}
                 placeholder="Nuevo proyecto"
                 aria-label="Nuevo proyecto"
                 required
@@ -1147,15 +1171,18 @@ export function App() {
                 type="submit"
                 aria-label="Crear proyecto"
                 disabled={!snapshot || creatingProject}
+                className="max-md:size-11 max-md:shrink-0"
               >
                 <InterfaceIcon name="plus" />
               </Button>
             </form>
+            {compactNavigation && projectCreationFailed && error && (
+              <p role="alert" className="px-2 text-sm text-danger">
+                {error}
+              </p>
+            )}
           </div>
-          <div className="mt-auto">
-            <ReleaseNotes />
-          </div>
-        </aside>
+        </WorkspaceSidebar>
 
         <main className="app-content">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -1334,10 +1361,10 @@ export function App() {
                   disabled={openingView}
                 />
               )}
-              <label className="search-field">
-                <InterfaceIcon name="search" />
+              <label className="search-field w-52">
+                <InterfaceIcon name="search" className="size-4 shrink-0" />
                 <input
-                  className="w-28 min-w-0 text-foreground outline-none placeholder:text-muted"
+                  className="min-w-0 flex-1 text-foreground outline-none placeholder:text-muted"
                   type="search"
                   placeholder="Buscar por título"
                   aria-label="Buscar por título"
