@@ -26,6 +26,7 @@ import {
   AutomaticReleaseNotes,
   CloseDialogButton,
   DeleteConfirmation,
+  RenameDialog,
 } from "./app-overlays";
 import { BlockNotes } from "./block-notes";
 import {
@@ -60,6 +61,11 @@ import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
 import { RoutinesWorkspace } from "./routines";
 import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
+import { useTaskSwipe } from "./task-swipe";
+import {
+  useWorkspacePreferences,
+  useWorkspaceShortcuts,
+} from "./workspace-shortcuts";
 import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 
 const repositories = createTaskRepositories();
@@ -554,6 +560,10 @@ function TaskDetail({
 
 export function App() {
   const [floating] = useState(readFloatingView);
+  const preferences = useWorkspacePreferences();
+  const bindings = preferences.keyboardShortcuts
+    ? preferences.bindings
+    : undefined;
   const compactNavigation = useCompactNavigation();
   const navigation = useRef<HTMLDialogElement>(null);
   const [openingView, setOpeningView] = useState(false);
@@ -562,6 +572,7 @@ export function App() {
   const [showRoutines, setShowRoutines] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
+  const [renameId, setRenameId] = useState<Id>();
   const calendarPosition = useRef<CalendarPosition>(undefined);
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
   const [readError, setReadError] = useState(false);
@@ -581,6 +592,7 @@ export function App() {
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
+  const [floatingCaptureOpen, setFloatingCaptureOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [projectCreationFailed, setProjectCreationFailed] = useState(false);
   const [taskSearch, setTaskSearch] = useState(floatingTasks?.search ?? "");
@@ -739,11 +751,14 @@ export function App() {
         ...parseCapture(input),
         projectId,
       });
-      setInbox("all");
+      if (!floatingTasks) setInbox("all");
       setStartEditing(true);
       setSelectedId(id);
     }, "Tarea creada.");
-    if (created) setInput("");
+    if (created) {
+      setInput("");
+      setFloatingCaptureOpen(false);
+    }
     setCapturing(false);
   }
 
@@ -787,6 +802,30 @@ export function App() {
           .includes(taskSearch.trim().toLocaleLowerCase("es")) &&
         matchesInbox(item, activeInbox, today),
     ) ?? [];
+  const swipeEnabled = preferences.mobile && preferences.swipeToDelete;
+  const swipeHandlers = useTaskSwipe(swipeEnabled, (id) => {
+    const item = visible.find((item) => item.id === id);
+    if (item) setDeletion({ item });
+  });
+  useWorkspaceShortcuts(bindings, (action) => {
+    if (!snapshot || floating?.kind === "task" || showRoutines) return;
+    if (action === "create") {
+      if (floatingTasks) setFloatingCaptureOpen(true);
+      requestAnimationFrame(() => capture.current?.focus());
+      return true;
+    }
+    const hovered = document.querySelector<HTMLElement>(
+      "[data-task-shortcut]:hover",
+    );
+    const item = visible.find(
+      (item) => item.id === hovered?.dataset.taskShortcut,
+    );
+    if (!item) return;
+    if (action === "edit") openTask(item.id, true);
+    if (action === "rename") setRenameId(item.id);
+    if (action === "delete") setDeletion({ item });
+    return true;
+  });
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const heading = showRoutines
     ? "Rutinas"
@@ -922,6 +961,42 @@ export function App() {
         : `Se borrarán ${deletion.ids.length === 1 ? "1 tarea" : `${deletion.ids.length} tareas`} de todo el espacio de trabajo, incluidas las de otros proyectos. El cambio se propagará a los dispositivos sincronizados.`}
     </DeleteConfirmation>
   );
+  const renameItem = snapshot?.items.find((item) => item.id === renameId);
+  const renameDialog = renameItem && (
+    <RenameDialog
+      key={renameItem.id}
+      title="Renombrar tarea"
+      name={renameItem.title}
+      close={() => setRenameId(undefined)}
+      save={async (title) => {
+        await repositories.items.update(renameItem.id, { title });
+        setError("");
+        setNotice("Tarea renombrada.");
+      }}
+    />
+  );
+
+  const quickCapture = (
+    <form className="quick-add" onSubmit={captureTask}>
+      <InterfaceIcon name="plus" className="size-5 shrink-0" />
+      <input
+        ref={capture}
+        className="min-w-0 flex-1 text-sm text-foreground outline-none placeholder:text-muted"
+        value={input}
+        onChange={(event) => setInput(event.target.value)}
+        placeholder="Ejemplo: Reunión con Ana mañana a las 10:00"
+        aria-label="Captura rápida"
+        required
+      />
+      <Button
+        className="h-8 px-2.5 text-xs"
+        type="submit"
+        disabled={!snapshot || capturing}
+      >
+        Añadir
+      </Button>
+    </form>
+  );
 
   const viewLoading = readError ? (
     <p role="alert" className="text-sm text-danger">
@@ -1003,11 +1078,13 @@ export function App() {
           </button>
         </header>
         {!selected && (notice || error) && <div>{feedback}</div>}
+        {floatingCaptureOpen && quickCapture}
         <div className={expanded ? "min-h-0 flex-1 overflow-auto" : undefined}>
           {viewLoading}
           {boardOrCalendar}
         </div>
         {taskDetail}
+        {renameDialog}
         {deleteConfirmation}
       </main>
     );
@@ -1071,6 +1148,7 @@ export function App() {
               <kbd className="shortcut-key hidden lg:inline">Ctrl+K</kbd>
             </button>
             <AppControls
+              preferences={preferences}
               store={repositories.sync}
               darkMode={darkMode}
               onThemeChange={changeTheme}
@@ -1249,6 +1327,7 @@ export function App() {
                 now={now}
                 store={repositories.routines}
                 openRoutines={openRoutines}
+                bindings={bindings}
               />
             ) : (
               <p className="text-sm text-muted" role="status">
@@ -1264,6 +1343,7 @@ export function App() {
               now={now}
               store={repositories.routines}
               openRoutines={openRoutines}
+              bindings={bindings}
             />
           )}
           <section
@@ -1315,25 +1395,7 @@ export function App() {
                 </div>
               </details>
             </div>
-            <form className="quick-add" onSubmit={captureTask}>
-              <InterfaceIcon name="plus" className="size-5 shrink-0" />
-              <input
-                ref={capture}
-                className="min-w-0 flex-1 text-sm text-foreground outline-none placeholder:text-muted"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ejemplo: Reunión con Ana mañana a las 10:00"
-                aria-label="Captura rápida"
-                required
-              />
-              <Button
-                className="h-8 px-2.5 text-xs"
-                type="submit"
-                disabled={!snapshot || capturing}
-              >
-                Añadir
-              </Button>
-            </form>
+            {quickCapture}
 
             <div className="my-3 flex flex-wrap items-center justify-between gap-2">
               <div
@@ -1381,7 +1443,7 @@ export function App() {
               {snapshot &&
                 layout === "list" &&
                 (visible.length ? (
-                  <ul>
+                  <ul {...swipeHandlers}>
                     {visible.map((item) => {
                       const project = item.projectId
                         ? projectById.get(item.projectId)
@@ -1389,7 +1451,11 @@ export function App() {
                       const done = item.status === "done";
                       const date = dateLabel(item);
                       return (
-                        <li key={item.id} className="task-row">
+                        <li
+                          key={item.id}
+                          data-task-shortcut={item.id}
+                          className={`task-row ${swipeEnabled ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
+                        >
                           <button
                             type="button"
                             aria-label={`Completar tarea: ${item.title}`}
@@ -1408,6 +1474,7 @@ export function App() {
                           </button>
                           <button
                             type="button"
+                            data-swipe-handle
                             className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
                             onClick={() => openTask(item.id)}
                           >
@@ -1459,6 +1526,17 @@ export function App() {
                                 <InterfaceIcon name="edit" />
                                 Editar tarea
                               </button>
+                              <button
+                                type="button"
+                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                onClick={(event) => {
+                                  closeDisclosure(event.currentTarget);
+                                  setRenameId(item.id);
+                                }}
+                              >
+                                <InterfaceIcon name="edit" />
+                                Renombrar tarea
+                              </button>
                               {desktopWindow && (
                                 <button
                                   type="button"
@@ -1500,6 +1578,7 @@ export function App() {
       </div>
 
       {taskDetail}
+      {renameDialog}
       {deleteConfirmation}
 
       {reminderAlert && (
