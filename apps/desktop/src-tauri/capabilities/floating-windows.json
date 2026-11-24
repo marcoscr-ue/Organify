@@ -3,5 +3,9 @@
   "description": "Cierre de ventanas independientes de Organify",
   "windows": ["task-*", "view-*"],
   "platforms": ["windows"],
-  "permissions": ["core:window:allow-close"]
+  "permissions": [
+    "core:window:allow-close",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
 }

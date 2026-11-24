@@ -3,9 +3,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import { applyTheme, readDarkMode } from "./theme";
+import { applyViewPreferences } from "./view-preferences";
 import "./index.css";
 
 applyTheme(readDarkMode());
+applyViewPreferences();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("No se encontró el elemento raíz.");

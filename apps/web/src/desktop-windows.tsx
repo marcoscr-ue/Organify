@@ -6,6 +6,13 @@ import { InterfaceIcon } from "./interface-icon";
 declare global {
   interface Window {
     __TAURI__?: {
+      event?: {
+        listen: (
+          event: string,
+          handler: () => void,
+          options: { target: string },
+        ) => Promise<() => void>;
+      };
       window?: {
         getCurrentWindow: () => {
           label: string;
@@ -27,7 +34,7 @@ declare global {
 export const desktopWindow = window.__TAURI__?.window?.getCurrentWindow();
 
 type FloatingView =
-  | { kind: "task"; id: Id }
+  | { kind: "task"; id: Id; edit: boolean }
   | {
       kind: "board" | "calendar";
       inbox: Inbox;
@@ -43,7 +50,7 @@ export function readFloatingView(): FloatingView | undefined {
   const kind = params.get("floating");
   if (kind === "task") {
     const id = params.get("task");
-    if (id) return { kind, id };
+    if (id) return { kind, id, edit: params.get("edit") === "true" };
   }
   if (kind === "board" || kind === "calendar") {
     const inbox = params.get("inbox");
@@ -69,7 +76,7 @@ export function readFloatingView(): FloatingView | undefined {
 export async function openFloatingView(view: FloatingView, title?: string) {
   const params =
     view.kind === "task"
-      ? { task: view.id }
+      ? { task: view.id, edit: String(view.edit) }
       : {
           inbox: view.inbox,
           project: view.projectId ?? "",
@@ -83,6 +90,7 @@ export async function openFloatingView(view: FloatingView, title?: string) {
   return window.__TAURI__?.core.invoke("open_floating_window", {
     kind: view.kind,
     taskId: view.kind === "task" ? view.id : null,
+    edit: view.kind === "task" && view.edit,
     title: title ?? null,
     context: context.toString(),
   });
@@ -186,64 +194,115 @@ export function DesktopWindowControls() {
   );
 }
 
-export function DesktopSettings() {
+export function DesktopPreference({
+  command,
+  children,
+}: {
+  command: "minimize_on_close" | "maximize_on_startup";
+  children: string;
+}) {
   const [enabled, setEnabled] = useState<boolean>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     void window.__TAURI__?.core
-      .invoke("minimize_on_close")
+      .invoke(command)
       .then((value) => setEnabled(value === true))
-      .catch(() => setError("No se pudo leer el ajuste de cierre."));
-  }, []);
+      .catch(() => setError("No se pudo leer el ajuste."));
+  }, [command]);
 
   async function update(next: boolean) {
     setBusy(true);
     setError("");
     try {
-      const value = await window.__TAURI__?.core.invoke("minimize_on_close", {
+      const value = await window.__TAURI__?.core.invoke(command, {
         enabled: next,
       });
       setEnabled(value === true);
     } catch {
-      setError("No se pudo guardar el ajuste de cierre.");
+      setError("No se pudo guardar el ajuste.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="grid gap-3 text-sm">
-      <label className="grid gap-1">
-        Al cerrar la ventana principal
-        <select
-          className="field"
-          value={enabled ? "minimize" : "quit"}
+    <div className="grid gap-1 text-sm">
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-primary"
+          checked={enabled === true}
           disabled={enabled === undefined || busy}
-          onChange={(event) => void update(event.target.value === "minimize")}
-        >
-          <option value="quit">Salir de Organify</option>
-          <option value="minimize">
-            Ocultar en la bandeja y seguir recibiendo recordatorios
-          </option>
-        </select>
+          onChange={(event) => void update(event.target.checked)}
+        />
+        {children}
       </label>
-      <button
-        type="button"
-        className="nav-link justify-self-start"
-        onClick={() =>
-          void window.__TAURI__?.core
-            .invoke("quit_organify")
-            .catch(() => setError("No se pudo salir de Organify."))
-        }
-      >
-        Salir de Organify ahora
-      </button>
       {error && (
         <p role="alert" className="text-danger">
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+export function ExperimentalUpdates() {
+  const [enabled, setEnabled] = useState<boolean>();
+  const [checking, setChecking] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void window.__TAURI__?.core
+      .invoke("experimental_updates")
+      .then((value) => {
+        if (typeof value === "boolean") setEnabled(value);
+        else setMessage("Disponible en instalaciones con actualizador.");
+      })
+      .catch(() => setMessage("No se pudo leer el ajuste."));
+  }, []);
+
+  async function change(next: boolean) {
+    const tauri = window.__TAURI__;
+    if (!tauri) return;
+    setChecking(true);
+    setMessage("");
+    try {
+      await tauri.core.invoke("experimental_updates", { enabled: next });
+      setEnabled(next);
+      if (next) {
+        setMessage("Buscando actualizaciones experimentales…");
+        const installed = await tauri.core.invoke("check_experimental_update");
+        setMessage(
+          installed
+            ? "Actualización instalada."
+            : "No hay una versión experimental más reciente.",
+        );
+      }
+    } catch {
+      setMessage("No se pudo completar la operación. Inténtalo de nuevo.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-2 text-sm">
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-primary"
+          checked={enabled === true}
+          disabled={enabled === undefined || checking}
+          onChange={(event) => void change(event.target.checked)}
+        />
+        Probar actualizaciones experimentales
+      </label>
+      <p className="text-muted">
+        Instala la versión preliminar más reciente cuando haya una disponible.
+        La aplicación puede reiniciarse.
+      </p>
+      {message && <p role="status">{message}</p>}
     </div>
   );
 }

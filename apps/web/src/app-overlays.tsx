@@ -11,11 +11,21 @@ import type { TaskRepositories } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
-import { DesktopSettings, desktopWindow } from "./desktop-windows";
+import {
+  DesktopPreference,
+  ExperimentalUpdates,
+  desktopWindow,
+} from "./desktop-windows";
 import { InterfaceIcon } from "./interface-icon";
 import { ShortcutSettings } from "./shortcut-settings";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 import type { WorkspacePreferences } from "./workspace-shortcuts";
+import {
+  fontSizes,
+  startupViews,
+  supportsFontSize,
+  type ViewPreferences,
+} from "./view-preferences";
 
 const introduced = (text: string) => ({ text, kind: "new" as const });
 const updated = (text: string) => ({ text, kind: "updated" as const });
@@ -55,6 +65,22 @@ type Release = {
 };
 
 const releases: Release[] = [
+  {
+    version: "0.14.0",
+    date: "2026-11-24",
+    changes: [
+      introduced(
+        "Elige la vista inicial y oculta los iconos de las tareas completadas y vencidas.",
+      ),
+      introduced("Aumenta el tamaño de la letra en Windows y web."),
+      {
+        ...introduced(
+          "Inicia Organify con la ventana maximizada, abre tareas directamente en ventanas independientes y prueba las actualizaciones experimentales desde Avanzado.",
+        ),
+        windowsOnly: true,
+      },
+    ],
+  },
   {
     version: "0.13.0",
     date: "2026-11-22",
@@ -606,7 +632,9 @@ export function AutomaticReleaseNotes() {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [skip, setSkip] = useState(false);
-  const release = releases.find((entry) => entry.version === desktopVersion);
+  const release = releases.find(
+    (entry) => entry.version === desktopVersion.split("-")[0],
+  );
 
   useEffect(() => {
     const core = window.__TAURI__?.core;
@@ -835,16 +863,27 @@ export function AppControls({
   darkMode,
   onThemeChange,
   preferences,
+  viewPreferences,
 }: {
   store: TaskRepositories["sync"];
   darkMode: boolean;
   onThemeChange: (dark: boolean) => void;
   preferences: WorkspacePreferences;
+  viewPreferences: ViewPreferences;
 }) {
   const [status, setStatus] = useState<SyncStatus>("inactive");
-  const [settings, setSettings] = useState<"general" | "shortcuts">("general");
-  const showShortcuts =
-    preferences.keyboardShortcuts && settings === "shortcuts";
+  const [settings, setSettings] = useState<
+    "general" | "shortcuts" | "advanced"
+  >("general");
+  const sections = [
+    { id: "general", label: "General", visible: true },
+    {
+      id: "shortcuts",
+      label: "Atajos de teclado",
+      visible: preferences.keyboardShortcuts,
+    },
+    { id: "advanced", label: "Avanzado", visible: true },
+  ] as const;
   const accountLabel = `Cuenta. ${syncStatusLabel[status]}`;
   return (
     <>
@@ -876,32 +915,35 @@ export function AppControls({
             aria-label="Secciones de ajustes"
             className="space-y-1 overflow-y-auto border-r border-line bg-panel px-2 py-3 sm:p-4"
           >
-            <button
-              type="button"
-              className="nav-link w-full text-xs sm:text-sm"
-              aria-current={!showShortcuts || undefined}
-              onClick={() => setSettings("general")}
-            >
-              General
-            </button>
-            {preferences.keyboardShortcuts && (
-              <button
-                type="button"
-                className="nav-link w-full text-xs sm:text-sm"
-                aria-current={showShortcuts || undefined}
-                onClick={() => setSettings("shortcuts")}
-              >
-                Atajos de teclado
-              </button>
-            )}
+            {sections
+              .filter(({ visible }) => visible)
+              .map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="nav-link w-full text-xs sm:text-sm"
+                  aria-current={settings === id || undefined}
+                  onClick={() => setSettings(id)}
+                >
+                  {label}
+                </button>
+              ))}
           </nav>
           <div className="overflow-y-auto overscroll-contain p-4 sm:p-6">
             <h3 className="mb-4 text-lg font-semibold">
-              {showShortcuts ? "Atajos de teclado" : "General"}
+              {sections.find(({ id }) => id === settings)?.label}
             </h3>
-            {showShortcuts ? (
-              <ShortcutSettings {...preferences} />
-            ) : (
+            {settings === "shortcuts" && <ShortcutSettings {...preferences} />}
+            {settings === "advanced" &&
+              (desktopWindow ? (
+                <ExperimentalUpdates />
+              ) : (
+                <p className="text-sm text-muted">
+                  Las actualizaciones experimentales están disponibles en
+                  Windows.
+                </p>
+              ))}
+            {settings === "general" && (
               <div className="grid gap-4">
                 <label className="grid gap-1 text-sm">
                   Tema
@@ -916,7 +958,83 @@ export function AppControls({
                     <option value="dark">Modo oscuro</option>
                   </select>
                 </label>
-                {desktopWindow && <DesktopSettings />}
+                <label className="grid gap-1 text-sm">
+                  Vista predeterminada
+                  <select
+                    className="field"
+                    value={viewPreferences.startupView}
+                    onChange={(event) => {
+                      const view = startupViews.find(
+                        ({ id }) => id === event.target.value,
+                      );
+                      if (view) viewPreferences.save({ startupView: view.id });
+                    }}
+                  >
+                    {startupViews.map(({ id, label }) => (
+                      <option key={id} value={id}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-primary"
+                    checked={viewPreferences.hideTaskStatus}
+                    onChange={(event) =>
+                      viewPreferences.save({
+                        hideTaskStatus: event.target.checked,
+                      })
+                    }
+                  />
+                  Ocultar los iconos de estado de las tareas
+                </label>
+                {supportsFontSize && (
+                  <label className="grid gap-1 text-sm">
+                    Tamaño de letra
+                    <select
+                      className="field"
+                      value={viewPreferences.fontSize}
+                      onChange={(event) => {
+                        const size = fontSizes.find(
+                          (value) => value === Number(event.target.value),
+                        );
+                        if (size) viewPreferences.save({ fontSize: size });
+                      }}
+                    >
+                      {fontSizes.map((size) => (
+                        <option key={size} value={size}>
+                          {size} %
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {desktopWindow && (
+                  <>
+                    <DesktopPreference command="maximize_on_startup">
+                      Iniciar con la ventana maximizada
+                    </DesktopPreference>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-primary"
+                        checked={viewPreferences.tasksInWindows}
+                        onChange={(event) =>
+                          viewPreferences.save({
+                            tasksInWindows: event.target.checked,
+                          })
+                        }
+                      />
+                      Abrir las tareas en ventanas independientes
+                    </label>
+                    <DesktopPreference command="minimize_on_close">
+                      Ocultar en la bandeja al cerrar y seguir recibiendo
+                      recordatorios
+                    </DesktopPreference>
+                  </>
+                )}
                 {preferences.mobile && (
                   <label className="flex items-start gap-2 text-sm">
                     <input

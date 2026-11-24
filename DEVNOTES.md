@@ -141,6 +141,8 @@ Para la siguiente release común, alinea los paquetes web, desktop y mobile, Tau
 
 Windows y Android consultan `releases/latest/download`. Conserva `latest.json` y `android.json` en la release marcada como **Latest release** para que ambos puedan detectar actualizaciones. Las prereleases quedan fuera de ese enlace.
 
+Para preparar una versión experimental de Windows, mantén la versión base en web y móvil, y añade un sufijo SemVer como `-beta.1` a esa misma versión en el paquete desktop, Tauri y Cargo. Ejecuta **Publicar Windows**, comprueba que el borrador está marcado como prerelease y publica el instalador firmado con su `latest.json`. Conserva la misma clave de firma que para las versiones estables. Las instalaciones con **Ajustes → Avanzado → Probar actualizaciones experimentales** activado consultan las prereleases públicas del repositorio y eligen la versión de Windows más alta que supere a la instalada.
+
 ## Qué reconstruir cuando cambia la app
 
 - **Código web, estilos o dependencias compartidas:** ejecuta las comprobaciones y recompila el destino que quieras usar. Para PWA, `corepack pnpm build` y vuelve a desplegar el contenido de `apps/web/dist`. Para Android, ejecuta `android:sync` y luego **Run** o genera un APK nuevo. Para Windows, ejecuta `desktop:build` de nuevo.
@@ -190,7 +192,11 @@ Abre dos tareas con **Abrir en ventana** desde la lista o desde el detalle. Edit
 
 Pulsa **Minimizar a la bandeja del sistema** y comprueba que la ventana principal desaparece de la barra de tareas. Busca el icono de Organify en el área de notificación de Windows, también accesible desde **Mostrar iconos ocultos**. Comprueba que puedes restaurar la ventana con un clic en el icono o con **Abrir Organify** en su menú contextual.
 
-En una instalación de Windows, programa un recordatorio y elige **Ocultar en la bandeja y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece mientras está oculta. Prueba que **Salir de Organify** en el menú de la bandeja cierra la app, incluidas sus ventanas independientes. Comprueba también que la X sale por completo al elegir **Salir de Organify** en Ajustes.
+En una instalación de Windows, programa un recordatorio y activa **Ocultar en la bandeja al cerrar y seguir recibiendo recordatorios** en **Ajustes**. Cierra la ventana principal con la X y comprueba que el aviso aparece mientras está oculta. Prueba que **Salir de Organify** en el menú de la bandeja cierra la app, incluidas sus ventanas independientes. Desactiva el ajuste de bandeja y comprueba que la X vuelve a cerrar la app.
+
+Activa **Iniciar con la ventana maximizada** y vuelve a abrir Organify. Activa **Abrir las tareas en ventanas independientes** y prueba a abrir una tarea desde la lista, el tablero y el calendario. Usa el atajo de edición y crea una tarea desde la captura rápida para comprobar que el editor abre en su propia ventana.
+
+En **Ajustes → General**, selecciona otra **Vista predeterminada** y vuelve a abrir la app. Comprueba que **Ocultar los iconos de estado de las tareas** oculta las marcas en lista y tablero, y que cambiar el **Tamaño de letra** se aplica en Windows y web al instante y tras volver a abrir la app.
 
 ## Probar Rutinas
 
