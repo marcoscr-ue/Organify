@@ -19,7 +19,14 @@ export default tseslint.config(
         caches: "readonly",
         URL: "readonly",
         fetch: "readonly",
+        Response: "readonly",
       },
+    },
+  },
+  {
+    files: ["supabase/**/*.mjs"],
+    languageOptions: {
+      globals: { Buffer: "readonly", console: "readonly", crypto: "readonly" },
     },
   },
   {
