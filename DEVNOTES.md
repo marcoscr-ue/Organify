@@ -180,11 +180,98 @@ La sincronización cifra el contenido que sale del dispositivo. IndexedDB conser
 
 ### Instalar la PWA
 
-Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique Vite. En Chrome, usa el icono de instalación junto a la barra de direcciones o busca **Instalar Organify** en el menú. Para que funcione sin conexión, abre la app online al menos una vez para que se active el service worker. Un despliegue público requiere HTTPS.
+Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique Vite. En Chrome, usa el icono de instalación junto a la barra de direcciones, busca **Instalar Organify** en el menú o pulsa **Instalar Organify** en **Ajustes → General**. En iPhone y iPad, abre la web en Safari, toca **Compartir → Añadir a pantalla de inicio** y abre la app desde el icono. Para que funcione sin conexión, abre la app online al menos una vez para que se active el service worker. Un despliegue público requiere HTTPS.
+
+Al desplegar una versión nueva, la PWA abierta muestra **Hay una versión nueva de Organify**. **Actualizar** activa el nuevo service worker y recarga la app. La comprobación se repite al volver a primer plano cada 15 minutos como máximo.
 
 ### Probar recordatorios
 
-Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo.
+Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta, salvo que actives los avisos push. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo. Al pulsar el aviso se abre la tarea.
+
+### Avisos push con la app cerrada (PWA en Android e iOS)
+
+Los avisos push permiten que la PWA reciba recordatorios cerrada en Android (Chrome, Edge, Firefox), en escritorio y en iPhone o iPad con iOS/iPadOS 16.4 o posterior. En iOS solo funcionan desde la app añadida a la pantalla de inicio. Las apps de Windows (Tauri) y Android (Capacitor) siguen usando sus avisos nativos.
+
+El servidor guarda la suscripción push de cada dispositivo y la hora de cada recordatorio con un identificador aleatorio. No recibe el título ni el identificador de la tarea. El aviso muestra el texto genérico de siempre. Se activan por dispositivo y requieren la sesión iniciada en **Cuenta**, sin necesidad de desbloquear el cifrado. Para mantener la lista del servidor al día, marca **Mantener sesión iniciada**.
+
+#### Desplegar en Supabase
+
+Se hace una vez por proyecto Supabase, que ya debe tener aplicadas las migraciones de la Fase 3. Los comandos se ejecutan desde la raíz del repositorio y funcionan en la terminal de macOS (zsh) y en PowerShell, salvo donde se indica. La [CLI de Supabase](https://supabase.com/docs/guides/local-development/cli/getting-started) se usa con `npx supabase` sin instalar nada. También puedes instalarla con `brew install supabase/tap/supabase` en macOS o `scoop install supabase` en Windows y escribir `supabase` en lugar de `npx supabase`. La CI no necesita nada de esto: solo comprueba, prueba y compila el código, igual que antes.
+
+1. Inicia sesión y enlaza el proyecto. El `ref` es el subdominio de `https://<ref>.supabase.co`:
+
+   ```sh
+   npx supabase login
+   npx supabase link --project-ref <ref>
+   ```
+
+2. Aplica `supabase/migrations/202611240001_push_reminders.sql` desde **SQL Editor**. No uses `supabase db push`: las migraciones anteriores se aplicaron a mano y la CLI intentaría ejecutarlas otra vez. Comprueba en **Table Editor** que existen `push_subscriptions` y `push_reminders`.
+
+3. Genera las claves VAPID y el secreto del cron:
+
+   ```sh
+   node supabase/generate-push-keys.mjs > supabase/functions/.env
+   ```
+
+   En Windows PowerShell 5.1, `>` guarda el archivo en UTF-16 y la CLI no lo lee bien. Usa en su lugar `node supabase/generate-push-keys.mjs | Set-Content -Encoding ascii supabase/functions/.env`.
+
+   Abre `supabase/functions/.env` y completa la última línea con un contacto, por ejemplo `ORGANIFY_VAPID_SUBJECT=mailto:avisos@ejemplo.com`. Apple rechaza los avisos sin él. El archivo está en `.gitignore`. Guarda una copia segura: si cambias las claves, cada dispositivo se vuelve a suscribir al abrir la app.
+
+4. Sube los secretos y despliega la función sin verificación de JWT. El `GET` solo devuelve la clave pública y el `POST` comprueba el secreto del cron por su cuenta. Si la CLI pide Docker para empaquetar la función, añade `--use-api`:
+
+   ```sh
+   npx supabase secrets set --env-file supabase/functions/.env
+   npx supabase functions deploy organify-push --no-verify-jwt
+   ```
+
+   Comprueba la función. En PowerShell, escribe `curl.exe` en lugar de `curl`:
+
+   ```sh
+   curl https://<ref>.supabase.co/functions/v1/organify-push
+   # {"publicKey":"B..."}
+   curl -i -X POST https://<ref>.supabase.co/functions/v1/organify-push
+   # HTTP/2 401: falta el secreto del cron
+   ```
+
+5. Copia `supabase/push-schedule.sql`, sustituye la URL de la función y el valor de `ORGANIFY_PUSH_CRON_SECRET` y ejecútalo en **SQL Editor**. No guardes en Git la copia con los valores reales. Si no se pueden crear las extensiones, activa `pg_cron` y `pg_net` en **Database → Extensions** y vuelve a ejecutarlo. Al cabo de dos minutos, comprueba que el cron funciona:
+
+   ```sql
+   select status, return_message, start_time
+   from cron.job_run_details order by start_time desc limit 5;
+
+   select status_code, content
+   from net._http_response order by created desc limit 5;
+   ```
+
+   Debe aparecer `succeeded` y respuestas `200` con `{"processed":0}`. Un `401` indica que el secreto del cron no coincide con el de la función. Para repetir el script, borra antes lo creado, porque Vault no admite nombres repetidos:
+
+   ```sql
+   select cron.unschedule('organify-push-reminders');
+   delete from vault.secrets where name in ('organify_push_url', 'organify_push_cron_secret');
+   ```
+
+6. Despliega `apps/web/dist` por HTTPS, o el ZIP del workflow **Publicar PWA**. No necesita variables nuevas.
+
+#### Probar los avisos push
+
+Activa los avisos en cada dispositivo:
+
+- **Android y escritorio:** inicia sesión en **Cuenta** con **Mantener sesión iniciada**, marca **Ajustes → General → Recibir recordatorios con la app cerrada** y concede el permiso.
+- **iPhone y iPad (iOS 16.4 o posterior):** abre la web en Safari y toca **Compartir → Añadir a pantalla de inicio**. Abre la app desde el icono, inicia sesión y activa la casilla. Desde Safari sin instalar, la casilla aparece desactivada.
+
+Programa un recordatorio dentro de dos o tres minutos y cierra la app por completo. El aviso debe llegar en el minuto siguiente a la hora elegida. Al pulsarlo se abre la tarea. Si la app sigue abierta, el aviso local retira el recordatorio del servidor. Si ambos coinciden en el mismo minuto, comparten etiqueta y el segundo sustituye al primero sin volver a sonar. Desactiva la casilla o cierra sesión para retirar la suscripción del servidor.
+
+Si no llega:
+
+- En **Edge Functions → organify-push → Logs**, comprueba si el servicio push rechazó el envío y con qué código.
+- Desde **SQL Editor**, comprueba que el recordatorio está en `push_reminders`.
+- En Android, revisa el permiso de notificaciones del navegador y el ahorro de batería.
+
+En Chrome de escritorio puedes probar el service worker sin servidor desde **DevTools → Application → Service workers → Push**: debe aparecer el aviso genérico.
+
+#### Desactivar los avisos push
+
+Para dejar de enviar avisos, ejecuta `select cron.unschedule('organify-push-reminders');`. La app sigue funcionando y los recordatorios vuelven a ser solo locales. Para retirarlo todo, borra también la función desde el panel y las tablas `push_reminders` y `push_subscriptions`.
 
 ### Probar las ventanas independientes de Windows
 

@@ -1,7 +1,8 @@
-import { Capacitor } from "@capacitor/core";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
+import { UpdateBanner } from "./pwa-settings";
+import { registerServiceWorker } from "./pwa";
 import { applyTheme, readDarkMode } from "./theme";
 import { applyViewPreferences } from "./view-preferences";
 import "./index.css";
@@ -15,18 +16,8 @@ if (!root) throw new Error("No se encontró el elemento raíz.");
 createRoot(root).render(
   <StrictMode>
     <App />
+    <UpdateBanner />
   </StrictMode>,
 );
 
-if (
-  import.meta.env.PROD &&
-  "serviceWorker" in navigator &&
-  !window.__TAURI__ &&
-  !Capacitor.isNativePlatform()
-) {
-  void navigator.serviceWorker
-    .register(import.meta.env.BASE_URL + "sw.js")
-    .catch((error: unknown) =>
-      console.error("No se pudo activar el modo sin conexión.", error),
-    );
-}
+registerServiceWorker();
