@@ -178,11 +178,41 @@ La sincronización cifra el contenido que sale del dispositivo. IndexedDB conser
 
 ### Instalar la PWA
 
-Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique Vite. En Chrome, usa el icono de instalación junto a la barra de direcciones o busca **Instalar Organify** en el menú. Para que funcione sin conexión, abre la app online al menos una vez para que se active el service worker. Un despliegue público requiere HTTPS.
+Ejecuta `corepack pnpm build` y `corepack pnpm preview`. Abre la URL que indique Vite. En Chrome, usa el icono de instalación junto a la barra de direcciones, busca **Instalar Organify** en el menú o pulsa **Instalar Organify** en **Ajustes → General**. En iPhone y iPad, abre la web en Safari, toca **Compartir → Añadir a pantalla de inicio** y abre la app desde el icono. Para que funcione sin conexión, abre la app online al menos una vez para que se active el service worker. Un despliegue público requiere HTTPS.
+
+Al desplegar una versión nueva, la PWA abierta muestra **Hay una versión nueva de Organify**. **Actualizar** activa el nuevo service worker y recarga la app. La comprobación se repite al volver a primer plano cada 15 minutos como máximo.
 
 ### Probar recordatorios
 
-Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo.
+Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta, salvo que actives los avisos push. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo. Al pulsar el aviso se abre la tarea.
+
+### Avisos push con la app cerrada (PWA en Android e iOS)
+
+Los avisos push permiten que la PWA reciba recordatorios cerrada en Android (Chrome, Edge, Firefox), en escritorio y en iPhone o iPad con iOS/iPadOS 16.4 o posterior. En iOS solo funcionan desde la app añadida a la pantalla de inicio. Las apps de Windows (Tauri) y Android (Capacitor) siguen usando sus avisos nativos.
+
+El servidor guarda la suscripción push de cada dispositivo y la hora de cada recordatorio con un identificador aleatorio. No recibe el título ni el identificador de la tarea. El aviso muestra el texto genérico de siempre. Se activan por dispositivo y requieren la sesión iniciada en **Cuenta**, sin necesidad de desbloquear el cifrado. Para mantener la lista del servidor al día, marca **Mantener sesión iniciada**.
+
+Configuración del proyecto Supabase, una sola vez. Necesitas la [CLI de Supabase](https://supabase.com/docs/guides/local-development/cli/getting-started) enlazada al proyecto con `supabase link`:
+
+1. Aplica `supabase/migrations/202611240001_push_reminders.sql` desde **SQL Editor**.
+2. Genera las claves VAPID y el secreto del cron. Abre `supabase/functions/.env` y completa `ORGANIFY_VAPID_SUBJECT` con un contacto `mailto:` o una URL `https://`. Apple rechaza los avisos sin este contacto. El archivo está en `.gitignore`. Guarda una copia segura: si cambias las claves, cada dispositivo tendrá que volver a suscribirse al abrir la app.
+
+   ```powershell
+   node supabase/generate-push-keys.mjs > supabase/functions/.env
+   ```
+
+3. Sube los secretos y despliega la función sin verificación de JWT. La función comprueba el secreto del cron por su cuenta y su `GET` solo devuelve la clave pública:
+
+   ```powershell
+   supabase secrets set --env-file supabase/functions/.env
+   supabase functions deploy organify-push --no-verify-jwt
+   ```
+
+4. Abre `supabase/push-schedule.sql`, sustituye la URL del proyecto y el valor de `ORGANIFY_PUSH_CRON_SECRET` y ejecútalo en **SQL Editor**. Programa `pg_cron` para llamar a la función cada minuto. Si no se pueden crear las extensiones, actívalas en **Database → Extensions**.
+
+Para probarlo, despliega la web por HTTPS e inicia sesión. En **Ajustes → General**, marca **Recibir recordatorios con la app cerrada** y concede el permiso. Programa un recordatorio dentro de dos o tres minutos y cierra la app por completo. El aviso debe llegar en el minuto siguiente a la hora elegida. Al pulsarlo se abre la tarea. Si la app sigue abierta, el aviso local retira el recordatorio del servidor. Si ambos coinciden en el mismo minuto, comparten etiqueta y el segundo sustituye al primero sin volver a sonar. En **Integrations → Cron** de Supabase puedes revisar las ejecuciones y en **Edge Functions → organify-push → Logs** los envíos. Desactiva la casilla o cierra sesión para retirar la suscripción del servidor.
+
+En Chrome de escritorio puedes probar el service worker sin servidor desde **DevTools → Application → Service workers → Push**: debe aparecer el aviso genérico.
 
 ### Probar las ventanas independientes de Windows
 

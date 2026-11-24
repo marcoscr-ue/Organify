@@ -142,6 +142,7 @@ alter table changes enable row level security;
 - Realtime de Supabase solo para avisar "hay cambios nuevos".
 - **Compactación (diferida, pero diseñada desde ya)**: ver sección 5.5.
 - Metadatos que el servidor sí ve: tamaño, momento y dispositivo de cada cambio. Se asume.
+- Con los avisos push activados en un dispositivo, el servidor también ve su suscripción push y la hora de cada recordatorio, con un identificador aleatorio sin relación con la tarea. Es opcional y se asume.
 
 ### 5.4 Estados a manejar
 Offline prolongado, reintentos con backoff, ops duplicadas (idempotencia), orden de llegada distinto, dispositivo nuevo (descarga completa + descifrado), y reinstalación.
@@ -240,7 +241,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 - TypeScript + React + Vite, web/PWA primero, Tauri (PC) y Capacitor (solo Android) después.
 - **FullCalendar** para el calendario (plugins MIT, detrás de `<CalendarView>`).
 - **TipTap + Yjs** para las notas en bloques.
-- **iOS descartado** por ahora.
+- **iOS nativo descartado** por ahora. iPhone y iPad usan la PWA añadida a la pantalla de inicio, que también recibe avisos push. La PWA instalada pide almacenamiento persistente con `navigator.storage.persist()`.
 - Dexie (IndexedDB) como almacenamiento local inicial, detrás de repositorios.
 - Sync por log de operaciones cifradas sobre Supabase (servidor tonto).
 - LWW por campo con HLC + Yjs para notas.
@@ -255,6 +256,8 @@ Solo migrar si se cumple alguno de estos disparadores:
 - Se quiere búsqueda de texto completo (FTS5) en lugar de MiniSearch en memoria.
 - Problemas de fiabilidad del almacenamiento en alguna plataforma. Al descartar iOS desaparece el riesgo principal (que el sistema borre IndexedDB); aun así, pedir almacenamiento persistente con `navigator.storage.persist()`, y recordar que el servidor conserva el log cifrado como copia.
 Si llega el momento, el cambio queda confinado a `packages/storage` gracias a la interfaz de repositorio.
+
+- **Avisos push en la PWA** (Android, escritorio e iOS 16.4+ instalada): opcionales por dispositivo. Una Edge Function de Supabase (`organify-push`), invocada por `pg_cron` cada minuto, envía Web Push con VAPID y cifrado aes128gcm implementados con Web Crypto, sin dependencias. El contenido es genérico: el servidor no conoce la tarea, solo la hora y un identificador aleatorio. Tauri y Capacitor siguen con avisos nativos.
 
 **Pendientes**
 - Ninguna decisión bloqueante para empezar.

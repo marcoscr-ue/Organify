@@ -10,6 +10,8 @@ function offlineShell(): Plugin {
     "manifest.webmanifest",
     "icon-192.png",
     "icon-512.png",
+    "icon-maskable-512.png",
+    "apple-touch-icon.png",
     "organify-favicon.png",
   ];
   return {
@@ -36,9 +38,11 @@ function offlineShell(): Plugin {
         fileName: "sw.js",
         source: worker
           .replace("__BUILD_ID__", hash.digest("hex").slice(0, 16))
+          // La plantilla contiene JSON.parse("__BUILD_FILES__"): se sustituye
+          // el literal completo por una cadena JSON escapada.
           .replace(
-            "__BUILD_FILES__",
-            JSON.stringify(files.map((file) => "./" + file)),
+            '"__BUILD_FILES__"',
+            JSON.stringify(JSON.stringify(files.map((file) => "./" + file))),
           ),
       });
     },

@@ -13,6 +13,7 @@ import { version as desktopVersion } from "../../desktop/package.json";
 import { version } from "../package.json";
 import { DesktopSettings, desktopWindow } from "./desktop-windows";
 import { InterfaceIcon } from "./interface-icon";
+import { PwaSettings } from "./pwa-settings";
 import { ShortcutSettings } from "./shortcut-settings";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
 import type { WorkspacePreferences } from "./workspace-shortcuts";
@@ -930,6 +931,7 @@ export function AppControls({
                     Deslizar hacia la derecha para borrar tareas en la lista
                   </label>
                 )}
+                <PwaSettings />
               </div>
             )}
           </div>
