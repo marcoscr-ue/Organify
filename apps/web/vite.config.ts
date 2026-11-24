@@ -30,9 +30,10 @@ function offlineShell(): Plugin {
       for (const asset of Object.values(bundle)) {
         hash.update(asset.type === "chunk" ? asset.code : asset.source);
       }
-      const files = [
-        ...new Set(["index.html", ...publicFiles, ...Object.keys(bundle)]),
-      ];
+      const files = new Set(["./", ...publicFiles.map((file) => `./${file}`)]);
+      for (const file of Object.keys(bundle)) {
+        if (file !== "index.html") files.add(`./${file}`);
+      }
       this.emitFile({
         type: "asset",
         fileName: "sw.js",
@@ -42,7 +43,7 @@ function offlineShell(): Plugin {
           // el literal completo por una cadena JSON escapada.
           .replace(
             '"__BUILD_FILES__"',
-            JSON.stringify(JSON.stringify(files.map((file) => "./" + file))),
+            JSON.stringify(JSON.stringify([...files])),
           ),
       });
     },
