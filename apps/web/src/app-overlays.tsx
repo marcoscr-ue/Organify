@@ -71,15 +71,21 @@ const releases: Release[] = [
     date: "2026-11-24",
     changes: [
       introduced(
+        "Instala Organify como aplicación web progresiva (PWA) y accede a ella desde el móvil.",
+      ),
+      introduced(
         "Elige la vista inicial y oculta los iconos de las tareas completadas y vencidas.",
       ),
-      introduced("Aumenta el tamaño de la letra en Windows y web."),
+      introduced("Ahora puedes aumentar el tamaño de la letra desde Ajustes."),
       {
         ...introduced(
           "Inicia Organify con la ventana maximizada, abre tareas directamente en ventanas independientes y prueba las actualizaciones experimentales desde Avanzado.",
         ),
         windowsOnly: true,
       },
+      updated(
+        "El modo de instalación móvil por APK será descontinuado a partir de esta versión. Instala Organify como PWA desde el navegador en Ajustes.",
+      ),
     ],
   },
   {
