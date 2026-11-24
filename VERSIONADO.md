@@ -6,6 +6,9 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.14.0 guarda las nuevas preferencias en el dispositivo. Los clientes anteriores y nuevos siguen intercambiando operaciones con el protocolo 1 y las migraciones de Supabase existentes para sincronizar datos.
+- Los avisos push de la PWA no cambian el protocolo 1, las operaciones, el esquema de IndexedDB ni las RPC de sincronización. La migración `202611240001_push_reminders.sql` añade tablas y RPC independientes (`organify_push_*`). Para entregar avisos, despliega también la función `organify-push` y programa su ejecución periódica. El cliente puede distribuirse antes de configurar este servicio y el resto de la app sigue funcionando. Los clientes anteriores no usan estas tablas. Los recordatorios locales añaden los campos opcionales `key` y `delivered` en `localStorage`. Los recordatorios guardados por versiones anteriores reciben un `key` al activar los avisos push. Si se vuelve a una versión anterior en el mismo navegador, cada aviso ya entregado puede mostrarse una vez más.
+
 - La 0.13.0 guarda la duración estimada y el tiempo empleado con dos operaciones de propiedad de tarea independientes (`prop:estimatedMinutes` y `prop:spentMinutes`). Los clientes anteriores ya conservan estas propiedades en las tareas y pueden seguir editando y sincronizando los campos que conocen. La vista En curso se calcula en cliente. Se mantienen el protocolo 1, el esquema de IndexedDB y las migraciones de Supabase.
 
 - La 0.10.0 conserva el protocolo 1 y el esquema de IndexedDB. Rutinas guarda cambios cifrados con operaciones de campo `item` sobre identificadores reservados `routine/<uuid>`, con un campo independiente por ciclo y paso. Los clientes anteriores conservan estas operaciones en el diario y siguen sincronizando tareas y proyectos. Tras actualizar, el cliente reconstruye las rutinas a partir del diario local, incluso si esas operaciones se descargaron antes de actualizar. Se aplican las mismas migraciones de Supabase.
@@ -24,6 +27,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 ## Actualizaciones de Windows
 
 La comprobación se activa en compilaciones de producción que incluyan la configuración `plugins.updater`. Al arrancar, Tauri consulta el manifiesto, verifica la firma del instalador y lo instala si hay una versión más reciente. Windows cierra la aplicación durante la instalación. Si la comprobación falla, se puede seguir usando la app.
+
+El canal experimental de Windows es opcional y se comprueba al activarlo y al arrancar. Usa el `latest.json` de la prerelease pública compatible de mayor versión, con la misma verificación de firma. Solo instala versiones superiores a la actual. Si al arrancar no hay una versión experimental aplicable, continúa la comprobación estable.
 
 Cuando el instalador NSIS se ejecuta desde el actualizador, registra la versión instalada. Al arrancar esa versión, Organify muestra sus notas de lanzamiento y borra el aviso al cerrar la ventana. El historial completo sigue disponible en el botón de versión.
 

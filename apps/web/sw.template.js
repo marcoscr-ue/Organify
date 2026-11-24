@@ -43,9 +43,87 @@ self.addEventListener("fetch", (event) => {
     )
   ) {
     event.respondWith(
-      caches
-        .open(CACHE)
-        .then(async (cache) => (await cache.match(request)) ?? fetch(request)),
+      caches.open(CACHE).then(async (cache) => {
+        // These static URLs are precached without the Origin header that a
+        // CORS request can send. Hosts may include Vary: Origin.
+        return (
+          (await cache.match(request, { ignoreVary: true })) ?? fetch(request)
+        );
+      }),
     );
   }
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "organify:skip-waiting") void self.skipWaiting();
+});
+
+const REMINDER_TITLE = "Organify";
+const REMINDER_BODY = "Tienes una tarea pendiente.";
+const DELIVERED_CACHE = "organify-push-delivered";
+
+function readPush(event) {
+  try {
+    const data = event.data?.json();
+    if (data?.v === 1 && typeof data.reminder === "string")
+      return data.reminder;
+  } catch {
+    // Mensaje sin formato conocido: se muestra el aviso genérico.
+  }
+  return undefined;
+}
+
+async function windowClients() {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true });
+}
+
+self.addEventListener("push", (event) => {
+  const reminder = readPush(event);
+  event.waitUntil(
+    (async () => {
+      if (reminder) {
+        // La app consulta esta marca para no repetir el aviso al abrirse.
+        const cache = await caches.open(DELIVERED_CACHE);
+        await cache.put(
+          new URL(
+            "__organify/push-delivered/" + reminder,
+            self.registration.scope,
+          ).href,
+          new Response(String(Date.now())),
+        );
+      }
+      // iOS exige mostrar una notificación por cada push recibido.
+      await self.registration.showNotification(REMINDER_TITLE, {
+        body: REMINDER_BODY,
+        tag: "organify-reminder:" + (reminder ?? "push"),
+        icon: "./icon-192.png",
+        lang: "es",
+        data: { reminder },
+      });
+      for (const client of await windowClients()) {
+        client.postMessage({ type: "organify:reminder", reminder });
+      }
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const reminder = event.notification.data?.reminder;
+  event.waitUntil(
+    (async () => {
+      const open = (await windowClients()).find((client) =>
+        client.url.startsWith(self.registration.scope),
+      );
+      if (open) {
+        await open.focus();
+        if (reminder)
+          open.postMessage({ type: "organify:open-reminder", reminder });
+        return;
+      }
+      const url = new URL(self.registration.scope);
+      if (reminder) url.searchParams.set("reminder", reminder);
+      await self.clients.openWindow(url.href);
+    })(),
+  );
 });

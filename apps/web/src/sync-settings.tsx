@@ -6,6 +6,7 @@ import {
 } from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { canRememberUnlock, protectDeviceUnlock } from "./device-unlock";
+import { releasePush, setPushAccount } from "./push";
 import {
   createAccountClient,
   protocolMessage,
@@ -102,12 +103,18 @@ export function SyncSettings({
         if (!active) return;
         if (error) throw error;
         if (!data.session) {
+          setPushAccount(undefined);
           setAccount(undefined);
           setRememberedUnlock(false);
           return;
         }
         const user = data.session.user;
         setAccount({ email: user.email ?? "", rememberSession: true });
+        setPushAccount({
+          api: client.api,
+          projectUrl: client.projectUrl,
+          userId: user.id,
+        });
         const saved = await deviceUnlockStore?.read(client.projectUrl);
         if (!active) return;
         setRememberedUnlock(saved?.userId === user.id);
@@ -232,6 +239,7 @@ export function SyncSettings({
       if (error) throw error;
       const userId = login.user.id;
       setAccount({ email: login.user.email ?? email, rememberSession });
+      setPushAccount({ api, projectUrl, userId });
       const { engine, recoveryKey, key, envelopeId } = await unlockSync(
         api,
         store,
@@ -303,6 +311,8 @@ export function SyncSettings({
         await deviceUnlockStore?.forget(projectUrl);
         setRememberedUnlock(false);
       } finally {
+        await releasePush();
+        setPushAccount(undefined);
         await api.auth.signOut({ scope: "local" });
         setAccount(undefined);
         setRememberLogin(false);
@@ -322,6 +332,8 @@ export function SyncSettings({
       try {
         await deviceUnlockStore?.forget(projectUrl);
       } finally {
+        await releasePush();
+        setPushAccount(undefined);
         await api.auth.signOut({ scope: "local" });
         await api.auth.dispose();
         setClient(undefined);

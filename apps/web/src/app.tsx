@@ -46,6 +46,7 @@ import {
   scheduleReminder,
   watchReminders,
 } from "./reminders";
+import { usePushState } from "./pwa-settings";
 import {
   latestTaskStart,
   localStamp,
@@ -70,15 +71,9 @@ import {
   useWorkspaceShortcuts,
 } from "./workspace-shortcuts";
 import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
+import { inboxes, useViewPreferences } from "./view-preferences";
 
 const repositories = createTaskRepositories();
-const inboxes: { id: Inbox; label: string }[] = [
-  { id: "today", label: "Hoy" },
-  { id: "in-progress", label: "En curso" },
-  { id: "all", label: "Todas" },
-  { id: "upcoming", label: "Próximas" },
-  { id: "undated", label: "Sin fecha" },
-];
 const inboxIcons = {
   all: "inbox",
   today: "sun",
@@ -174,6 +169,7 @@ function TaskDetail({
   const [saving, setSaving] = useState(false);
   const [reminderDraft, setReminderDraft] = useState<string>();
   const [reminderError, setReminderError] = useState("");
+  const push = usePushState();
   const project = projects.find(({ id }) => id === item.projectId);
   const reminder = reminderTime(item.id);
   const currentReminder = reminder
@@ -199,6 +195,23 @@ function TaskDetail({
     window.addEventListener("resize", resetPosition);
     return () => window.removeEventListener("resize", resetPosition);
   }, []);
+
+  useEffect(() => {
+    if (!floating || !desktopWindow) return;
+    let active = true;
+    const subscription = window.__TAURI__?.event?.listen(
+      "edit-task",
+      () => {
+        if (active) setEditing(true);
+      },
+      { target: desktopWindow.label },
+    );
+    void subscription?.catch(console.error);
+    return () => {
+      active = false;
+      void subscription?.then((unlisten) => unlisten()).catch(console.error);
+    };
+  }, [floating]);
 
   function moveDialog(event: PointerEvent<HTMLDivElement>) {
     const origin = drag.current;
@@ -544,7 +557,11 @@ function TaskDetail({
             <p className="text-muted">
               {isAndroid
                 ? "Android puede retrasar el aviso para ahorrar batería."
-                : "Mantén la aplicación abierta para recibir el aviso."}
+                : push.enabled
+                  ? "Recibirás el aviso aunque cierres la aplicación."
+                  : push.availability === "native"
+                    ? "Mantén la aplicación abierta para recibir el aviso."
+                    : "Mantén la aplicación abierta para recibir el aviso o activa los avisos con la app cerrada en Ajustes."}
             </p>
             {reminderError && (
               <p role="alert" className="text-danger">
@@ -619,6 +636,8 @@ function TaskDetail({
 export function App() {
   const [floating] = useState(readFloatingView);
   const preferences = useWorkspacePreferences();
+  const viewPreferences = useViewPreferences();
+  const { startupView } = viewPreferences;
   const bindings = preferences.keyboardShortcuts
     ? preferences.bindings
     : undefined;
@@ -627,7 +646,9 @@ export function App() {
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
-  const [showRoutines, setShowRoutines] = useState(false);
+  const [showRoutines, setShowRoutines] = useState(
+    !floating && startupView === "routines",
+  );
   const [tasksOpen, setTasksOpen] = useState(true);
   const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
   const [renameId, setRenameId] = useState<Id>();
@@ -637,15 +658,26 @@ export function App() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const floatingTasks = floating?.kind !== "task" ? floating : undefined;
-  const [inbox, setInbox] = useState<Inbox>(floatingTasks?.inbox ?? "today");
+  const [inbox, setInbox] = useState<Inbox>(
+    floatingTasks?.inbox ??
+      inboxes.find(({ id }) => id === startupView)?.id ??
+      (startupView === "board" || startupView === "calendar" ? "all" : "today"),
+  );
   const [projectId, setProjectId] = useState<Id | undefined>(
     floatingTasks?.projectId,
   );
-  const [layout, setLayout] = useState<Layout>(floatingTasks?.kind ?? "list");
+  const [layout, setLayout] = useState<Layout>(
+    floatingTasks?.kind ??
+      (startupView === "board" || startupView === "calendar"
+        ? startupView
+        : "list"),
+  );
   const [selectedId, setSelectedId] = useState<Id | undefined>(
     floating?.kind === "task" ? floating.id : undefined,
   );
-  const [startEditing, setStartEditing] = useState(false);
+  const [startEditing, setStartEditing] = useState(
+    floating?.kind === "task" && floating.edit,
+  );
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -685,7 +717,11 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!floating) return watchReminders(setReminderAlert);
+    if (!floating)
+      return watchReminders(setReminderAlert, (id) => {
+        setStartEditing(false);
+        setSelectedId(id);
+      });
   }, [floating]);
   useEffect(() => {
     if (floating?.kind === "task") return;
@@ -734,9 +770,24 @@ export function App() {
     setSelectedId(undefined);
   }
 
-  function openTask(id: Id, edit = false) {
+  async function openTask(id: Id, edit = false, title?: string) {
     setNotice("");
     setError("");
+    if (
+      desktopWindow &&
+      viewPreferences.tasksInWindows &&
+      floating?.kind !== "task"
+    ) {
+      try {
+        await openFloatingView(
+          { kind: "task", id, edit },
+          title ?? snapshot?.items.find((item) => item.id === id)?.title,
+        );
+        return;
+      } catch {
+        setError("No se pudo abrir la tarea en una ventana independiente.");
+      }
+    }
     setStartEditing(edit);
     setSelectedId(id);
   }
@@ -772,7 +823,11 @@ export function App() {
 
   async function floatTask(item: Item, fromDetail = false) {
     const opened = await write(
-      () => openFloatingView({ kind: "task", id: item.id }, item.title),
+      () =>
+        openFloatingView(
+          { kind: "task", id: item.id, edit: false },
+          item.title,
+        ),
       "",
     );
     if (opened && fromDetail) {
@@ -805,13 +860,13 @@ export function App() {
     if (capturing || !input.trim()) return;
     setCapturing(true);
     const created = await write(async () => {
+      const task = parseCapture(input);
       const id = await repositories.items.create({
-        ...parseCapture(input),
+        ...task,
         projectId,
       });
       if (!floatingTasks) setInbox("all");
-      setStartEditing(true);
-      setSelectedId(id);
+      await openTask(id, true, task.title);
     }, "Tarea creada.");
     if (created) {
       setInput("");
@@ -1215,6 +1270,7 @@ export function App() {
             </button>
             <AppControls
               preferences={preferences}
+              viewPreferences={viewPreferences}
               store={repositories.sync}
               darkMode={darkMode}
               onThemeChange={changeTheme}
@@ -1651,7 +1707,7 @@ export function App() {
       {deleteConfirmation}
 
       {reminderAlert && (
-        <div className="fixed right-4 bottom-4 z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
+        <div className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
           <InterfaceIcon name="bell" className="size-4 shrink-0 text-primary" />
           <p role="status" className="text-sm wrap-anywhere">
             {reminderTitle

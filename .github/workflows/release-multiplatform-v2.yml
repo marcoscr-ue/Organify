@@ -1,0 +1,19 @@
+name: Publicar Multiplataforma V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Evita conflictos si el flujo antiguo aún se ejecuta en paralelo.
+concurrency:
+  group: organify-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/release-multiplatform.yml
+    with:
+      platform: pwa-windows
+    secrets: inherit
