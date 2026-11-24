@@ -6,11 +6,6 @@ on:
 permissions:
   contents: write
 
-# Evita conflictos si el flujo antiguo aún se ejecuta en paralelo.
-concurrency:
-  group: organify-release
-  cancel-in-progress: false
-
 jobs:
   release:
     uses: ./.github/workflows/release-multiplatform.yml
