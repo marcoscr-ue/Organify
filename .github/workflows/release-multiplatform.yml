@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       platform:
-        description: Plataforma que se compila (all, windows, android o pwa)
+        description: Plataforma que se compila (all, windows, android, pwa o pwa-windows)
         type: string
         default: all
 
@@ -38,7 +38,7 @@ jobs:
           node --input-type=module <<'JS'
           import { readFileSync, appendFileSync } from 'node:fs';
           const platform = process.env.PLATFORM || 'all';
-          if (!['all', 'windows', 'android', 'pwa'].includes(platform)) throw new Error('Plataforma desconocida');
+          if (!['all', 'windows', 'android', 'pwa', 'pwa-windows'].includes(platform)) throw new Error('Plataforma desconocida');
           const read = path => JSON.parse(readFileSync(path, 'utf8'));
           const web = read('apps/web/package.json').version;
           const mobile = read('apps/mobile/package.json').version;
@@ -159,7 +159,7 @@ jobs:
           includeUpdaterJson: true
   release-android:
     needs: prepare
-    if: inputs.platform != 'windows' && inputs.platform != 'pwa'
+    if: inputs.platform != 'windows' && inputs.platform != 'pwa' && inputs.platform != 'pwa-windows'
     runs-on: ubuntu-latest
     env:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
