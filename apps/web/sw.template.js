@@ -43,9 +43,13 @@ self.addEventListener("fetch", (event) => {
     )
   ) {
     event.respondWith(
-      caches
-        .open(CACHE)
-        .then(async (cache) => (await cache.match(request)) ?? fetch(request)),
+      caches.open(CACHE).then(async (cache) => {
+        // These static URLs are precached without the Origin header that a
+        // CORS request can send. Hosts may include Vary: Origin.
+        return (
+          (await cache.match(request, { ignoreVary: true })) ?? fetch(request)
+        );
+      }),
     );
   }
 });
