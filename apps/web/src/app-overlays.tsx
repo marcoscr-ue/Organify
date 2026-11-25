@@ -67,6 +67,15 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.15.3",
+    date: "2026-11-25",
+    changes: [
+      improved(
+        "Edita o borra una serie completa desde «Todos los eventos», incluidos sus tramos.",
+      ),
+    ],
+  },
+  {
     version: "0.15.2",
     date: "2026-11-25",
     changes: [

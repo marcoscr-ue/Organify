@@ -21,6 +21,17 @@ export type EventFutureChanges = EventChanges & {
   recurrence?: EventRecurrence | null;
 };
 
+export type EventSeriesChanges = Omit<EventChanges, "timing"> & {
+  timing?: {
+    dayShift: number;
+    allDay?: boolean;
+    startTime?: string;
+    duration?: { allDay: boolean; milliseconds: number };
+    timeZone?: string;
+  };
+  recurrence?: Partial<EventRecurrence>;
+};
+
 export interface EventFutureImpact {
   replacesSchedule: boolean;
   segments: { title: string; from: string }[];
@@ -68,6 +79,15 @@ export interface TaskRepositories {
       id: Id,
       originalStart: string,
       changes: EventFutureChanges | null,
+      revision: string,
+    ): Promise<void>;
+    previewSeries(
+      id: Id,
+      changes: EventSeriesChanges | null,
+    ): Promise<EventFutureImpact>;
+    changeSeries(
+      id: Id,
+      changes: EventSeriesChanges | null,
       revision: string,
     ): Promise<void>;
   };
