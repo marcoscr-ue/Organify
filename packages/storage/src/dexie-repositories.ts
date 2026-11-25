@@ -10,8 +10,10 @@ import type {
   Op,
   Replica,
   RoutineSchedule,
+  EventInput,
 } from "@organify/core";
 import {
+  isEventSchedule,
   isProjectColor,
   isRoutineSchedule,
   routineDate,
@@ -30,6 +32,7 @@ import {
 } from "./journal";
 import type { SavedView, TaskRepositories } from "./index";
 import { readRoutine, routineKeyPrefix } from "./routine-journal";
+import { eventIdPrefix, eventKeyPrefix, readEvent } from "./event-journal";
 
 class OrganifyDatabase extends Dexie {
   declare items: Table<Item, Id>;
@@ -187,7 +190,76 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     );
   }
 
+  async function getSingleEvent(id: Id) {
+    const key = "item:" + id;
+    const row = key.startsWith(eventKeyPrefix) && (await db.replicas.get(key));
+    const event = row && readEvent(key, row.state);
+    if (!event) throw new Error("El evento ya no está disponible.");
+    if (event.recurrence)
+      throw new Error("Esta versión solo permite consultar series.");
+    return event;
+  }
+
+  async function setEventField(id: Id, field: string, value: Json) {
+    await mergeReplica(db, await recordField(db, id, "event:" + field, value));
+  }
+
+  async function saveEvent(id: Id, input: EventInput, previous?: EventInput) {
+    const title = requiredText(
+      input.title,
+      "Escribe un título para el evento.",
+    );
+    const { timing, recurrence, color } = input;
+    const notes = input.notes.trim();
+    if (!isEventSchedule({ timing, recurrence }))
+      throw new Error(
+        "Comprueba las fechas, las horas y la repetición del evento.",
+      );
+    if (color !== null && !isProjectColor(color))
+      throw new Error("El color del evento no es válido.");
+    const schedule = { timing, recurrence };
+    if (
+      !previous ||
+      JSON.stringify(schedule) !==
+        JSON.stringify({
+          timing: previous.timing,
+          recurrence: previous.recurrence,
+        })
+    )
+      await setEventField(id, "schedule", schedule);
+    if (title !== previous?.title) await setEventField(id, "title", title);
+    if (notes !== (previous?.notes ?? ""))
+      await setEventField(id, "notes", notes);
+    if (color !== (previous?.color ?? null))
+      await setEventField(id, "color", color);
+  }
+
   return {
+    events: {
+      create(input) {
+        return db.transaction("rw", writeTables, async () => {
+          const id = eventIdPrefix + v7();
+          await saveEvent(id, input);
+          return id;
+        });
+      },
+      update(id, changes) {
+        return db.transaction("rw", writeTables, async () => {
+          const previous = await getSingleEvent(id);
+          await saveEvent(
+            id,
+            { ...previous, ...changes, recurrence: null },
+            previous,
+          );
+        });
+      },
+      remove(id) {
+        return db.transaction("rw", writeTables, async () => {
+          await getSingleEvent(id);
+          await setEventField(id, "removed", true);
+        });
+      },
+    },
     routines: {
       create(input) {
         const name = requiredText(
@@ -342,6 +414,12 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           projects: (await db.projects.orderBy("order").toArray()).filter(
             (project) => !project.deletedAt && !project.archived,
           ),
+          events: (
+            await db.replicas.where(":id").startsWith(eventKeyPrefix).toArray()
+          ).flatMap(({ key, state }) => {
+            const event = readEvent(key, state);
+            return event ? [event] : [];
+          }),
           routines: (
             await db.replicas
               .where(":id")

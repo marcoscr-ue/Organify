@@ -30,12 +30,13 @@ self.addEventListener("fetch", (event) => {
     url.pathname === new URL(self.registration.scope).pathname
   ) {
     event.respondWith(
-      caches
-        .open(CACHE)
-        .then(
-          async (cache) =>
-            (await cache.match("./index.html")) ?? fetch(request),
-        ),
+      caches.open(CACHE).then(async (cache) => {
+        // El alojamiento puede redirigir index.html a la raíz. Chrome solo
+        // acepta una respuesta sin redirección para esta navegación.
+        const shell = await cache.match(self.registration.scope);
+        if (shell && !shell.redirected) return shell;
+        return fetch(request);
+      }),
     );
   } else if (
     FILES.some(

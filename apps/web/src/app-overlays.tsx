@@ -67,6 +67,18 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.15.0",
+    date: "2026-11-25",
+    changes: [
+      introduced(
+        "Organiza citas y compromisos en la agenda Eventos y consúltalos junto a tus tareas en el calendario.",
+      ),
+      introduced(
+        "Crea eventos únicos, de día completo y series con repetición diaria, semanal o mensual.",
+      ),
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-11-24",
     changes: [

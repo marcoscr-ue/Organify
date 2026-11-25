@@ -98,6 +98,11 @@ dialog::backdrop {
   backdrop-filter: blur(3px);
 }
 
+.organify-calendar .calendar-commitment {
+  cursor: pointer;
+  border-inline-start-width: 3px;
+}
+
 @layer components {
   .field {
     @apply max-w-full rounded-md border border-control-line bg-paper px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary;

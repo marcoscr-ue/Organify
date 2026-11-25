@@ -6,6 +6,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.15.0 guarda eventos en el diario mediante operaciones de campo `item` del protocolo 1, con identificadores `event/<uuid>` y campos `event:*`. El inicio, el fin, la zona y la repetición se guardan juntos para mantener una programación coherente al sincronizar. Los clientes 0.14 conservan las operaciones en sus réplicas, siguen intercambiando tareas y muestran los eventos guardados cuando se actualizan. El esquema de IndexedDB y las RPC de Supabase se mantienen. Para esta versión, Android usa `versionName` 0.15.0 y `versionCode` 15000 al generar el APK de distribución.
+
 - La 0.14.0 guarda las nuevas preferencias en el dispositivo. Los clientes anteriores y nuevos siguen intercambiando operaciones con el protocolo 1 y las migraciones de Supabase existentes para sincronizar datos.
 - Los avisos push de la PWA no cambian el protocolo 1, las operaciones, el esquema de IndexedDB ni las RPC de sincronización. La migración `202611240001_push_reminders.sql` añade tablas y RPC independientes (`organify_push_*`). Para entregar avisos, despliega también la función `organify-push` y programa su ejecución periódica. El cliente puede distribuirse antes de configurar este servicio y el resto de la app sigue funcionando. Los clientes anteriores no usan estas tablas. Los recordatorios locales añaden los campos opcionales `key` y `delivered` en `localStorage`. Los recordatorios guardados por versiones anteriores reciben un `key` al activar los avisos push. Si se vuelve a una versión anterior en el mismo navegador, cada aviso ya entregado puede mostrarse una vez más.
 

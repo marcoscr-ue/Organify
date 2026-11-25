@@ -15,6 +15,7 @@ export const startupViews = [
   { id: "board", label: "Tablero" },
   { id: "calendar", label: "Calendario" },
   { id: "routines", label: "Rutinas" },
+  { id: "events", label: "Eventos" },
 ] as const;
 
 export const fontSizes = [100, 110, 125] as const;
