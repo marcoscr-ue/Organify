@@ -157,10 +157,12 @@ El modelo de series, tramos y excepciones se diseña desde la primera fase para 
 - Aplicar las reglas de conservación y retirada de excepciones. Mostrar el efecto antes de confirmar un cambio de horario o regla.
 - Resolver divisiones incompatibles creadas sin conexión.
 
+El corte usa el inicio previsto en la zona de la serie. Si se cambia la programación, el tramo nuevo puede comenzar el mismo día del corte o más adelante. Elegir «Sin repetición» deja un único evento a partir del corte. Ante cambios offline incompatibles sobre el futuro del mismo grupo, se aplica el conjunto de tramos de la operación ganadora según el orden del diario (HLC, dispositivo e identificador). Las excepciones de un tramo descartado quedan fuera de la agenda.
+
 **Criterios de aceptación**
 
 - Dividir o cortar desde una cita desplazada y comprobar que se usa su fecha original. Verificar que las excepciones anteriores sobreviven y que las afectadas coinciden con la confirmación mostrada.
-- Dividir offline desde dos dispositivos con cambios incompatibles, reconectar en ambos órdenes y comprobar que el historial converge sin tramos activos solapados.
+- Partir de la misma serie sincronizada en dos dispositivos, desconectarlos y hacer dos divisiones incompatibles. Reconectar primero el dispositivo con el cambio más reciente y esperar a que ambos hayan descargado los dos cambios. Repetir con una serie de prueba nueva e invertir el orden de reconexión. El cambio con mayor HLC debe prevalecer en ambos casos y el historial debe converger sin tramos activos solapados.
 
 ### 0.15.3 — Operaciones sobre toda la serie
 

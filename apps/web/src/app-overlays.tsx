@@ -67,10 +67,19 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.15.2",
+    date: "2026-11-25",
+    changes: [
+      improved(
+        "Edita o borra un evento repetible y los siguientes. Revisa qué tramos y excepciones se retirarán al cambiar la programación.",
+      ),
+    ],
+  },
+  {
     version: "0.15.1",
     date: "2026-11-25",
     changes: [
-      introduced(
+      improved(
         "Edita, mueve o cancela una sola ocurrencia de un evento repetible.",
       ),
     ],
