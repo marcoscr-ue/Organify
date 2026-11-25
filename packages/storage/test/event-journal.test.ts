@@ -6,7 +6,7 @@ import {
   SyncEngine,
   type SyncStore,
 } from "../../sync/src/engine";
-import { readEvent } from "../src/event-journal";
+import { eventExceptionPrefix, readEvent } from "../src/event-journal";
 import { materialize, type JournalTables } from "../src/journal";
 
 function device(adapter: MemoryAdapter, queue: Op[]) {
@@ -119,4 +119,43 @@ it("mantiene un evento borrado al llegar una edición offline más reciente", ()
       edits.reverse().reduce<Replica>(mergeOp, { fields: {} }),
     ),
   ).toBeUndefined();
+});
+
+it("fusiona campos de una ocurrencia de dos dispositivos y conserva su cancelación", async () => {
+  const adapter = new MemoryAdapter();
+  const prefix = eventExceptionPrefix + "2026-11-25/";
+  const timing = { allDay: true, start: "2026-12-02", end: "2026-12-03" };
+  const a = device(
+    adapter,
+    fields("a", "event/1", {
+      "event:schedule": {
+        timing: { allDay: true, start: "2026-11-25", end: "2026-11-26" },
+        recurrence: { frequency: "weekly", interval: 1, until: null },
+      },
+      "event:title": "Clase",
+      [prefix + "timing"]: timing,
+    }),
+  );
+  const b = device(
+    adapter,
+    fields("b", "event/1", {
+      [prefix + "notes"]: "Apuntes",
+      [eventExceptionPrefix + "2026-12-02/cancelled"]: true,
+      [eventExceptionPrefix + "2026-12-02/title"]: "Edición posterior",
+    }),
+  );
+  adapter.online = false;
+  await expect(a.engine.sync()).rejects.toThrow();
+  await expect(b.engine.sync()).rejects.toThrow();
+  adapter.online = true;
+  await b.engine.sync();
+  await a.engine.sync();
+  await b.engine.sync();
+  const left = readEvent(eventKey, a.replicas.get(eventKey)!);
+  expect(readEvent(eventKey, b.replicas.get(eventKey)!)).toEqual(left);
+  expect(left?.exceptions).toEqual({
+    "2026-11-25": { notes: "Apuntes", timing },
+    "2026-12-02": { cancelled: true, title: "Edición posterior" },
+  });
+  expect(a.tasks.size + b.tasks.size).toBe(0);
 });

@@ -14,6 +14,7 @@ import type {
 } from "@organify/core";
 import {
   isEventSchedule,
+  isEventOccurrenceStart,
   isProjectColor,
   isRoutineSchedule,
   routineDate,
@@ -32,7 +33,12 @@ import {
 } from "./journal";
 import type { SavedView, TaskRepositories } from "./index";
 import { readRoutine, routineKeyPrefix } from "./routine-journal";
-import { eventIdPrefix, eventKeyPrefix, readEvent } from "./event-journal";
+import {
+  eventExceptionPrefix,
+  eventIdPrefix,
+  eventKeyPrefix,
+  readEvent,
+} from "./event-journal";
 
 class OrganifyDatabase extends Dexie {
   declare items: Table<Item, Id>;
@@ -190,14 +196,43 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     );
   }
 
-  async function getSingleEvent(id: Id) {
+  async function getEvent(id: Id) {
     const key = "item:" + id;
     const row = key.startsWith(eventKeyPrefix) && (await db.replicas.get(key));
     const event = row && readEvent(key, row.state);
     if (!event) throw new Error("El evento ya no está disponible.");
+    return event;
+  }
+
+  async function getSingleEvent(id: Id) {
+    const event = await getEvent(id);
     if (event.recurrence)
       throw new Error("Esta versión solo permite consultar series.");
     return event;
+  }
+
+  async function getOccurrence(id: Id, originalStart: string) {
+    const event = await getEvent(id);
+    if (!isEventOccurrenceStart(event, originalStart))
+      throw new Error("Esta ocurrencia ya no pertenece a la serie.");
+    return event.exceptions?.[originalStart] ?? {};
+  }
+
+  async function setExceptionField(
+    id: Id,
+    start: string,
+    field: string,
+    value: Json,
+  ) {
+    await mergeReplica(
+      db,
+      await recordField(
+        db,
+        id,
+        `${eventExceptionPrefix}${start}/${field}`,
+        value,
+      ),
+    );
   }
 
   async function setEventField(id: Id, field: string, value: Json) {
@@ -257,6 +292,43 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
         return db.transaction("rw", writeTables, async () => {
           await getSingleEvent(id);
           await setEventField(id, "removed", true);
+        });
+      },
+      updateOccurrence(id, originalStart, changes) {
+        return db.transaction("rw", writeTables, async () => {
+          const previous = await getOccurrence(id, originalStart);
+          if (previous.cancelled)
+            throw new Error("Esta ocurrencia ya está cancelada.");
+          const { title, notes, color, timing } = changes;
+          if (title !== undefined && title !== previous.title)
+            await setExceptionField(
+              id,
+              originalStart,
+              "title",
+              requiredText(title, "Escribe un título para el evento."),
+            );
+          if (notes !== undefined && notes !== previous.notes)
+            await setExceptionField(id, originalStart, "notes", notes.trim());
+          if (color !== undefined && color !== previous.color) {
+            if (color !== null && !isProjectColor(color))
+              throw new Error("El color del evento no es válido.");
+            await setExceptionField(id, originalStart, "color", color);
+          }
+          if (
+            timing &&
+            JSON.stringify(timing) !== JSON.stringify(previous.timing)
+          ) {
+            if (!isEventSchedule({ timing, recurrence: null }))
+              throw new Error("Comprueba las fechas y las horas del evento.");
+            await setExceptionField(id, originalStart, "timing", timing);
+          }
+        });
+      },
+      cancelOccurrence(id, originalStart) {
+        return db.transaction("rw", writeTables, async () => {
+          const previous = await getOccurrence(id, originalStart);
+          if (!previous.cancelled)
+            await setExceptionField(id, originalStart, "cancelled", true);
         });
       },
     },

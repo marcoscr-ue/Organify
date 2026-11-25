@@ -1161,6 +1161,17 @@ export function App() {
           projects={projectById}
           open={openTask}
           openEvent={setEventAction}
+          rescheduleOccurrence={(occurrence, timing) =>
+            write(
+              () =>
+                repositories.events.updateOccurrence(
+                  occurrence.event.id,
+                  occurrence.originalStart,
+                  { timing },
+                ),
+              "Se ha movido solo este evento.",
+            )
+          }
           reschedule={(id, changes) =>
             write(
               () => repositories.items.update(id, changes),
