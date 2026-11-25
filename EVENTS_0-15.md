@@ -68,6 +68,7 @@ Una edición puntual guarda los campos modificados. Los demás se heredan del tr
 - La fecha final es **inclusiva**. Se compara con la fecha de inicio prevista de cada ocurrencia en la zona de la serie. Un evento puede terminar después de esa fecha si empezó dentro de ella.
 - La repetición mensual mantiene el día de inicio. Si ese día no existe en un mes, se omite ese mes y se mantiene el día para los siguientes. Una serie mensual del 31 pasa de enero a marzo. Para los días 29, 30 y 31, el formulario muestra «Se omitirán los meses que no tengan ese día».
 - Los eventos con hora conservan la hora local prevista y la zona IANA de la serie. Al consultar, se resuelve cada inicio a un instante para mostrarlo en el calendario. Si la hora local no existe, se desplaza esa ocurrencia por la diferencia del cambio de hora. Si la hora se repite, se usa el primer instante. En Madrid, las 02:30 de una serie semanal se muestran a las 03:30 el domingo del salto de primavera y una sola vez en la primera 02:30 del cambio de otoño. La clave de ambas ocurrencias usa las 02:30 previstas.
+- Las ocurrencias mantienen la duración efectiva que resulta del inicio y el fin originales. Si el inicio original cae en un salto de hora, se conserva la diferencia entre las horas introducidas y se desplaza el evento completo.
 - Los eventos de día completo usan fechas civiles y un fin exclusivo para representar uno o varios días. Conservan esas fechas al consultar desde otra zona horaria.
 
 ## Comportamiento de edición y borrado
