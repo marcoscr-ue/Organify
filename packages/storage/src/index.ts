@@ -14,7 +14,19 @@ import type {
   CalendarEvent,
   EventInput,
   EventChanges,
+  EventRecurrence,
 } from "@organify/core";
+
+export type EventFutureChanges = EventChanges & {
+  recurrence?: EventRecurrence | null;
+};
+
+export interface EventFutureImpact {
+  replacesSchedule: boolean;
+  segments: { title: string; from: string }[];
+  exceptions: number;
+  revision: string;
+}
 
 export interface TaskSnapshot {
   items: Item[];
@@ -47,6 +59,17 @@ export interface TaskRepositories {
       changes: EventChanges,
     ): Promise<void>;
     cancelOccurrence(id: Id, originalStart: string): Promise<void>;
+    previewFuture(
+      id: Id,
+      originalStart: string,
+      changes: EventFutureChanges | null,
+    ): Promise<EventFutureImpact>;
+    changeFuture(
+      id: Id,
+      originalStart: string,
+      changes: EventFutureChanges | null,
+      revision: string,
+    ): Promise<void>;
   };
   routines: {
     create(input: RoutineInput): Promise<Id>;

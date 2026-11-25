@@ -30,6 +30,9 @@ export interface EventInput extends EventSchedule {
 export interface CalendarEvent extends EventInput {
   id: string;
   groupId: string | null;
+  from?: string | null;
+  before?: string | null;
+  duration?: number;
   exceptions?: Record<string, EventException>;
 }
 
@@ -42,6 +45,7 @@ export interface EventException extends EventChanges {
 export interface EventOccurrence {
   id: string;
   event: CalendarEvent;
+  segment: CalendarEvent;
   originalStart: string;
   start: string;
   end: string;
@@ -173,7 +177,13 @@ export function isEventOccurrenceStart(event: CalendarEvent, value: string) {
   const { timing, recurrence } = event;
   if (!recurrence || !(timing.allDay ? dateOnly : dateTime).test(value))
     return false;
-  if (!isRoutineDate(value.slice(0, 10)) || value < timing.start) return false;
+  if (
+    !isRoutineDate(value.slice(0, 10)) ||
+    value < timing.start ||
+    (event.from && value < event.from) ||
+    (event.before && value >= event.before)
+  )
+    return false;
   const instant = civilTime(value);
   return (
     plannedStarts(
@@ -185,7 +195,7 @@ export function isEventOccurrenceStart(event: CalendarEvent, value: string) {
   );
 }
 
-function eventDuration(timing: EventTiming) {
+export function eventDuration(timing: EventTiming) {
   const start = civilTime(timing.start);
   const end = civilTime(timing.end);
   if (!timing.allDay) {
@@ -196,6 +206,18 @@ function eventDuration(timing: EventTiming) {
     }
   }
   return end - start;
+}
+
+export function plannedEventTiming(
+  timing: EventTiming,
+  start: string,
+): EventTiming {
+  const end = new Date(
+    civilTime(start) + civilTime(timing.end) - civilTime(timing.start),
+  )
+    .toISOString()
+    .slice(0, timing.allDay ? 10 : 16);
+  return { ...timing, start, end };
 }
 
 export function occurrenceTiming(
@@ -245,6 +267,7 @@ export function eventOccurrences(
   const lastCivilDate = civilTime(routineDate(+end - 1, displayZone));
   const occurrences: EventOccurrence[] = [];
   function include(
+    segment: CalendarEvent,
     event: CalendarEvent,
     originalStart: string,
     planned: number,
@@ -264,6 +287,7 @@ export function eventOccurrences(
     occurrences.push({
       id: `${event.id}/${originalStart}`,
       event,
+      segment,
       originalStart,
       start: stamp(instant),
       end: stamp(instant + duration),
@@ -272,15 +296,18 @@ export function eventOccurrences(
   for (const event of events) {
     const { timing, recurrence, exceptions } = event;
     const anchor = civilTime(timing.start);
-    const duration = eventDuration(timing);
+    const duration = event.duration ?? eventDuration(timing);
     const from = timing.allDay ? civilStart : +start;
     const to = timing.allDay ? lastCivilDate + day : +end;
     // Offsets and a clock change can place the instant on another UTC day.
     const margin = timing.allDay ? 0 : 2 * day;
     for (const planned of plannedStarts(
       anchor,
-      from - duration - margin,
-      to + margin,
+      Math.max(
+        from - duration - margin,
+        event.from ? civilTime(event.from) : -Infinity,
+      ),
+      Math.min(to + margin, event.before ? civilTime(event.before) : Infinity),
       recurrence,
     )) {
       const originalStart = new Date(planned)
@@ -289,6 +316,7 @@ export function eventOccurrences(
       const exception = exceptions?.[originalStart];
       if (exception?.cancelled || exception?.timing) continue;
       include(
+        event,
         exception ? { ...event, ...exception } : event,
         originalStart,
         planned,
@@ -302,6 +330,7 @@ export function eventOccurrences(
         isEventOccurrenceStart(event, originalStart)
       ) {
         include(
+          event,
           { ...event, ...exception },
           originalStart,
           civilTime(exception.timing.start),

@@ -3,13 +3,18 @@ import {
   eventFrequencies,
   eventOccurrences,
   occurrenceTiming,
+  plannedEventTiming,
   shiftRoutineDate,
   type CalendarEvent,
   type EventInput,
   type EventOccurrence,
   type EventRecurrence,
 } from "@organify/core";
-import type { TaskRepositories } from "@organify/storage";
+import type {
+  EventFutureChanges,
+  EventFutureImpact,
+  TaskRepositories,
+} from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { CloseDialogButton } from "./app-overlays";
 import { localStamp } from "./calendar-schedule";
@@ -47,6 +52,11 @@ function occurrenceLabel({ event, start, end }: EventOccurrence) {
     return `${label} · Todo el día`;
   }
   return timeLabel.formatRange(new Date(start), new Date(end));
+}
+
+function plannedLabel(start: string) {
+  const date = dayLabel.format(new Date(start.slice(0, 10)));
+  return start.length > 10 ? `${date} a las ${start.slice(11)}` : date;
 }
 
 export function EventsAgenda({
@@ -169,43 +179,70 @@ export function EventDialog({
   const date = "date" in action ? action.date : undefined;
   const original = occurrence?.event;
   const recurring = Boolean(original?.recurrence);
+  const [scope, setScope] = useState<"single" | "future">("single");
+  const [mode, setMode] = useState<
+    | "detail"
+    | "editor"
+    | "choose-edit"
+    | "choose-delete"
+    | "delete"
+    | "confirm-future"
+  >(occurrence ? "detail" : "editor");
+  const [confirmation, setConfirmation] = useState<{
+    changes: EventFutureChanges | null;
+    impact: EventFutureImpact;
+  }>();
+  const [draft, setDraft] = useState<EventInput>();
   const editorEvent =
-    occurrence && recurring
+    occurrence && scope === "future"
       ? {
-          ...occurrence.event,
-          timing: occurrence.event.timing.allDay
-            ? {
-                allDay: true as const,
-                start: occurrence.start,
-                end: occurrence.end,
-              }
-            : occurrenceTiming(
-                occurrence.event.timing,
-                new Date(occurrence.start),
-                new Date(occurrence.end),
-                false,
-                calendarZone,
-              ),
+          ...occurrence.segment,
+          timing: plannedEventTiming(
+            occurrence.segment.timing,
+            occurrence.originalStart,
+          ),
         }
-      : original;
-  const [mode, setMode] = useState(occurrence ? "detail" : "editor");
+      : occurrence && recurring
+        ? {
+            ...occurrence.event,
+            timing: occurrence.event.timing.allDay
+              ? {
+                  allDay: true as const,
+                  start: occurrence.start,
+                  end: occurrence.end,
+                }
+              : occurrenceTiming(
+                  occurrence.event.timing,
+                  new Date(occurrence.start),
+                  new Date(occurrence.end),
+                  false,
+                  calendarZone,
+                ),
+          }
+        : original;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
   useLayoutEffect(() => {
     const element = dialog.current;
     element?.showModal();
-    element?.querySelector<HTMLInputElement>("input[name=title]")?.focus();
     return () => element?.close();
   }, []);
+  useLayoutEffect(() => {
+    if (mode === "editor")
+      dialog.current
+        ?.querySelector<HTMLInputElement>("input[name=title]")
+        ?.focus();
+    else heading.current?.focus();
+  }, [mode]);
 
-  async function write(operation: () => Promise<unknown>) {
+  async function act(operation: () => Promise<unknown>) {
     setBusy(true);
     setError("");
     try {
       await operation();
-      close();
     } catch (error) {
       setError(
         error instanceof Error
@@ -217,17 +254,58 @@ export function EventDialog({
     }
   }
 
+  function write(operation: () => Promise<unknown>) {
+    return act(async () => {
+      await operation();
+      close();
+    });
+  }
+
+  function previewFuture(changes: EventFutureChanges | null) {
+    if (!occurrence) return Promise.resolve();
+    const { id } = occurrence.segment;
+    const { originalStart } = occurrence;
+    return act(async () => {
+      const impact = await store.previewFuture(id, originalStart, changes);
+      if (impact.replacesSchedule) {
+        setConfirmation({ changes, impact });
+        setMode("confirm-future");
+      } else {
+        await store.changeFuture(id, originalStart, changes, impact.revision);
+        close();
+      }
+    });
+  }
+
   function save(input: EventInput) {
     if (!editorEvent) return write(() => store.create(input));
     const { title, notes, color, timing } = input;
-    const changes = {
+    const previousTiming = editorEvent.timing;
+    const changes: EventFutureChanges = {
       ...(title !== editorEvent.title && { title }),
       ...(notes !== editorEvent.notes && { notes }),
       ...(color !== editorEvent.color && { color }),
-      ...(JSON.stringify(timing) !== JSON.stringify(editorEvent.timing) && {
+      ...((timing.start !== previousTiming.start ||
+        timing.end !== previousTiming.end ||
+        timing.allDay !== previousTiming.allDay ||
+        (!timing.allDay &&
+          !previousTiming.allDay &&
+          timing.timeZone !== previousTiming.timeZone)) && {
         timing,
       }),
     };
+    if (scope === "future") {
+      const { recurrence } = input;
+      const previous = editorEvent.recurrence;
+      if (
+        recurrence?.frequency !== previous?.frequency ||
+        recurrence?.interval !== previous?.interval ||
+        recurrence?.until !== previous?.until
+      )
+        changes.recurrence = recurrence;
+      setDraft(input);
+      return previewFuture(changes);
+    }
     return write(() =>
       recurring && occurrence
         ? store.updateOccurrence(
@@ -237,6 +315,15 @@ export function EventDialog({
           )
         : store.update(editorEvent.id, changes),
     );
+  }
+
+  function choose(next: "single" | "future") {
+    setScope(next);
+    setError("");
+    setDraft(undefined);
+    if (mode === "choose-edit") setMode("editor");
+    else if (next === "single") setMode("delete");
+    else void previewFuture(null);
   }
 
   return (
@@ -254,24 +341,130 @@ export function EventDialog({
     >
       <div className="routine-dialog-content">
         <div className="flex items-start justify-between gap-3">
-          <h2 id={titleId} className="wrap-anywhere text-xl font-semibold">
+          <h2
+            id={titleId}
+            ref={heading}
+            tabIndex={-1}
+            className="wrap-anywhere text-xl font-semibold"
+          >
             {mode === "editor"
               ? original
                 ? recurring
-                  ? "Editar solo este evento"
+                  ? scope === "future"
+                    ? "Editar este evento y los siguientes"
+                    : "Editar solo este evento"
                   : "Editar evento"
                 : "Nuevo evento"
-              : original?.title}
+              : mode === "choose-edit"
+                ? "Editar evento repetible"
+                : mode === "choose-delete"
+                  ? "Borrar evento repetible"
+                  : mode === "confirm-future"
+                    ? confirmation?.changes
+                      ? "Confirmar cambio de programación"
+                      : "Borrar este evento y los siguientes"
+                    : original?.title}
           </h2>
           <CloseDialogButton onClick={close} disabled={busy} />
         </div>
         {mode === "editor" && (
-          <EventEditor
-            original={editorEvent}
-            date={date}
-            busy={busy}
-            save={save}
-          />
+          <>
+            {scope === "future" && occurrence && (
+              <p className="mt-3 text-sm text-muted">
+                Los cambios se aplicarán desde el inicio previsto del{" "}
+                {plannedLabel(occurrence.originalStart)}.
+              </p>
+            )}
+            <EventEditor
+              original={editorEvent && { ...editorEvent, ...draft }}
+              date={date}
+              editRecurrence={!editorEvent || scope === "future"}
+              busy={busy}
+              save={save}
+            />
+          </>
+        )}
+        {(mode === "choose-edit" || mode === "choose-delete") && (
+          <div className="mt-4 grid gap-3">
+            <p>¿A qué ocurrencias quieres aplicar el cambio?</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="topbar-button px-3"
+                disabled={busy}
+                onClick={() => choose("single")}
+              >
+                Solo este evento
+              </button>
+              <Button disabled={busy} onClick={() => choose("future")}>
+                Este evento y los siguientes
+              </Button>
+              <button
+                type="button"
+                className="topbar-button px-3"
+                disabled={busy}
+                onClick={() => {
+                  setError("");
+                  setMode("detail");
+                }}
+              >
+                Volver
+              </button>
+            </div>
+          </div>
+        )}
+        {mode === "confirm-future" && occurrence && confirmation && (
+          <div className="mt-4 grid gap-3">
+            <p>
+              {confirmation.changes ? "Se reemplazará" : "Se retirará"} la
+              programación de estos tramos desde las fechas indicadas:
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              {confirmation.impact.segments.map(({ title, from }, index) => (
+                <li key={index}>
+                  {title} · {plannedLabel(from)}
+                </li>
+              ))}
+            </ul>
+            <p>
+              {confirmation.impact.exceptions === 1
+                ? "Se retirará 1 excepción."
+                : `Se retirarán ${confirmation.impact.exceptions} excepciones.`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="topbar-button px-3"
+                disabled={busy}
+                onClick={() => {
+                  setError("");
+                  setMode(confirmation.changes ? "editor" : "choose-delete");
+                }}
+              >
+                Volver
+              </button>
+              <Button
+                className={
+                  confirmation.changes
+                    ? undefined
+                    : "bg-danger text-white hover:bg-danger/90"
+                }
+                disabled={busy}
+                onClick={() =>
+                  void write(() =>
+                    store.changeFuture(
+                      occurrence.segment.id,
+                      occurrence.originalStart,
+                      confirmation.changes,
+                      confirmation.impact.revision,
+                    ),
+                  )
+                }
+              >
+                {confirmation.changes ? "Confirmar cambios" : "Borrar eventos"}
+              </Button>
+            </div>
+          </div>
         )}
         {mode === "detail" && occurrence && (
           <div className="mt-3 grid gap-3">
@@ -296,15 +489,17 @@ export function EventDialog({
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setMode("editor")}>
-                {recurring ? "Editar solo este evento" : "Editar"}
+              <Button
+                onClick={() => setMode(recurring ? "choose-edit" : "editor")}
+              >
+                Editar
               </Button>
               <button
                 type="button"
                 className="topbar-button px-3 text-danger"
-                onClick={() => setMode("delete")}
+                onClick={() => setMode(recurring ? "choose-delete" : "delete")}
               >
-                {recurring ? "Cancelar solo este evento" : "Borrar"}
+                Borrar
               </button>
             </div>
           </div>
@@ -360,17 +555,19 @@ export function EventDialog({
 function EventEditor({
   original,
   date,
+  editRecurrence,
   busy,
   save,
 }: {
   original?: CalendarEvent;
   date?: string;
+  editRecurrence: boolean;
   busy: boolean;
   save: (input: EventInput) => Promise<void>;
 }) {
   const [allDay, setAllDay] = useState(original?.timing.allDay ?? false);
   const [frequency, setFrequency] = useState<EventRecurrence["frequency"] | "">(
-    "",
+    editRecurrence ? (original?.recurrence?.frequency ?? "") : "",
   );
   const [useColor, setUseColor] = useState(Boolean(original?.color));
   const [defaults] = useState(() => {
@@ -501,7 +698,7 @@ function EventEditor({
           )}
         </div>
         {!allDay && <p className="text-muted">Zona horaria: {timeZone}</p>}
-        {!original && (
+        {editRecurrence && (
           <label className="grid gap-1">
             Repetición
             <select
@@ -537,7 +734,7 @@ function EventEditor({
                 name="interval"
                 min="1"
                 step="1"
-                defaultValue="1"
+                defaultValue={original?.recurrence?.interval ?? 1}
                 className={field}
               />
             </label>
@@ -547,6 +744,7 @@ function EventEditor({
                 type="date"
                 name="until"
                 min={startDate}
+                defaultValue={original?.recurrence?.until ?? ""}
                 className={field}
               />
             </label>
