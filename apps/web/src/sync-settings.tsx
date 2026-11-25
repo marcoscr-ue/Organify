@@ -16,6 +16,7 @@ import {
   unlockSync,
   type SyncProject,
 } from "./sync-connection";
+import type { WorkspaceSession } from "./workspace-connection";
 
 const projectStorageKey = "organify:sync-project";
 
@@ -55,10 +56,12 @@ export function SyncSettings({
   store,
   status,
   onStatus,
+  onWorkspaceSession,
 }: {
   store: TaskRepositories["sync"];
   status: SyncStatus;
   onStatus: (status: SyncStatus) => void;
+  onWorkspaceSession: (session?: WorkspaceSession) => void;
 }) {
   const [client, setClient] = useState(initialClient);
   const [account, setAccount] = useState<{
@@ -83,6 +86,7 @@ export function SyncSettings({
           if (isSyncProtocolError(error)) {
             stop();
             setStopSync(undefined);
+            onWorkspaceSession(undefined);
             setMessage(protocolMessage);
           }
         },
@@ -90,10 +94,17 @@ export function SyncSettings({
       );
       setStopSync(() => stop);
     },
-    [onStatus],
+    [onStatus, onWorkspaceSession],
   );
 
   useEffect(() => stopSync, [stopSync]);
+  useEffect(() => {
+    if (!client) return;
+    const { data } = client.api.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") onWorkspaceSession(undefined);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [client, onWorkspaceSession]);
   useEffect(() => {
     if (!client) return;
     let active = true;
@@ -120,8 +131,11 @@ export function SyncSettings({
         setRememberedUnlock(saved?.userId === user.id);
         if (saved?.userId !== user.id) return;
         onStatus("pending");
-        const engine = await resumeSync(client.api, store, saved);
-        if (active) startSync(engine);
+        const { engine, key } = await resumeSync(client.api, store, saved);
+        if (active) {
+          startSync(engine);
+          onWorkspaceSession({ api: client.api, userId: user.id, key });
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -135,7 +149,7 @@ export function SyncSettings({
     return () => {
       active = false;
     };
-  }, [client, onStatus, restoreAttempt, startSync, store]);
+  }, [client, onStatus, onWorkspaceSession, restoreAttempt, startSync, store]);
 
   const restoreAgain = useCallback(() => {
     setMessage("");
@@ -272,6 +286,7 @@ export function SyncSettings({
         }
       }
       startSync(engine);
+      onWorkspaceSession({ api, userId, key });
       form.reset();
     } catch (error) {
       onStatus("error");
@@ -299,6 +314,7 @@ export function SyncSettings({
   }
 
   async function disconnect() {
+    onWorkspaceSession(undefined);
     stopSync?.();
     setStopSync(undefined);
     setRecovery("");
@@ -327,6 +343,7 @@ export function SyncSettings({
   }
 
   async function changeProject() {
+    onWorkspaceSession(undefined);
     setBusy(true);
     try {
       try {

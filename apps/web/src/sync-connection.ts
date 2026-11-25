@@ -114,7 +114,7 @@ export async function resumeSync(
   }
   const key = await openDeviceUnlock(saved);
   await store.bind(saved.userId);
-  return createEngine(api, store, saved.userId, key);
+  return { engine: createEngine(api, store, saved.userId, key), key };
 }
 
 export async function unlockSync(
