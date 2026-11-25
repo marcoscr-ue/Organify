@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  eventOccurrenceForReminder,
   matchesInbox,
   taskDuration,
   taskDurationFields,
@@ -42,6 +43,9 @@ import {
   cancelReminder,
   cancelReminders,
   isAndroid,
+  isEventReminderId,
+  reconcileEventReminders,
+  reminderPermissionEvent,
   reminderTime,
   scheduleReminder,
   watchReminders,
@@ -64,7 +68,12 @@ import {
 import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
 import { RoutinesWorkspace } from "./routines";
-import { EventDialog, EventsAgenda, type EventDialogAction } from "./events";
+import {
+  calendarZone,
+  EventDialog,
+  EventsAgenda,
+  type EventDialogAction,
+} from "./events";
 import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
 import { useTaskSwipe } from "./task-swipe";
 import {
@@ -697,6 +706,8 @@ export function App() {
   );
   const [query, setQuery] = useState("");
   const [reminderAlert, setReminderAlert] = useState<Id>();
+  const [eventReminderToOpen, setEventReminderToOpen] = useState<Id>();
+  const scheduledEvents = snapshot?.events;
   const capture = useRef<HTMLInputElement>(null);
   const palette = useRef<HTMLDialogElement>(null);
 
@@ -725,10 +736,47 @@ export function App() {
   useEffect(() => {
     if (!floating)
       return watchReminders(setReminderAlert, (id) => {
+        if (isEventReminderId(id)) {
+          setEventReminderToOpen(id);
+          return;
+        }
         setStartEditing(false);
         setSelectedId(id);
       });
   }, [floating]);
+  useEffect(() => {
+    if (floating || !scheduledEvents) return;
+    const events = scheduledEvents;
+    const refresh = () => {
+      void reconcileEventReminders(events, calendarZone).catch(
+        (error: unknown) =>
+          console.error(
+            "No se pudieron actualizar los recordatorios de eventos.",
+            error,
+          ),
+      );
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15 * 60_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener(reminderPermissionEvent, refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(reminderPermissionEvent, refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [floating, scheduledEvents]);
+  useEffect(() => {
+    if (!eventReminderToOpen || !scheduledEvents) return;
+    setSection("events");
+    setSelectedId(undefined);
+    setEventAction(
+      eventOccurrenceForReminder(scheduledEvents, eventReminderToOpen),
+    );
+    setEventReminderToOpen(undefined);
+  }, [eventReminderToOpen, scheduledEvents]);
   useEffect(() => {
     if (floating?.kind === "task") return;
     const refreshClock = () => setNow(Date.now());
@@ -909,9 +957,11 @@ export function App() {
 
   const projects = snapshot?.projects ?? [];
   const selected = snapshot?.items.find((item) => item.id === selectedId);
-  const reminderTitle = snapshot?.items.find(
-    (item) => item.id === reminderAlert,
-  )?.title;
+  const eventAlert = Boolean(reminderAlert && isEventReminderId(reminderAlert));
+  const reminderTitle = eventAlert
+    ? eventOccurrenceForReminder(scheduledEvents ?? [], reminderAlert!)?.event
+        .title
+    : snapshot?.items.find((item) => item.id === reminderAlert)?.title;
   const today = new Date(now);
   const todayItems =
     snapshot?.items.filter((item) => matchesInbox(item, "today", today)) ?? [];
@@ -1773,7 +1823,9 @@ export function App() {
           <p role="status" className="text-sm wrap-anywhere">
             {reminderTitle
               ? `Recordatorio: ${reminderTitle}`
-              : "Tienes una tarea pendiente."}
+              : eventAlert
+                ? "Tienes un recordatorio de Organify."
+                : "Tienes una tarea pendiente."}
           </p>
           <CloseDialogButton onClick={() => setReminderAlert(undefined)} />
         </div>

@@ -31,6 +31,7 @@ También puedes bajar una copia desde **Code → Download ZIP** en GitHub. Desco
 
 ## Documentación
 
-- [Notas de desarrollo](DEVNOTES.md) para preparar el entorno, ejecutar las comprobaciones, configurar Supabase y compilar o publicar cada plataforma.
-- [Diseño y arquitectura](PROYECTO.md) para conocer la estructura y las decisiones del proyecto.
-- [Versionado y compatibilidad](VERSIONADO.md) para preparar releases y cambios en la sincronización.
+- [Notas de desarrollo](docs/DEVNOTES.md) para preparar el entorno, ejecutar las comprobaciones, configurar Supabase y compilar o publicar cada plataforma.
+- [Diseño y arquitectura](docs/PROYECTO.md) para conocer la estructura y las decisiones del proyecto.
+- [Versionado y compatibilidad](docs/VERSIONADO.md) para preparar releases y cambios en la sincronización.
+- [Diseño de Eventos](docs/EVENTS_0-15.md) para consultar cómo funcionan las series, las excepciones y los recordatorios.

@@ -15,6 +15,7 @@ import type {
 import {
   isEventSchedule,
   isEventOccurrenceStart,
+  isEventReminder,
   isProjectColor,
   isRoutineSchedule,
   routineDate,
@@ -262,7 +263,7 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
       input.title,
       "Escribe un título para el evento.",
     );
-    const { timing, recurrence, color } = input;
+    const { timing, recurrence, color, reminderMinutes } = input;
     const notes = input.notes.trim();
     if (!isEventSchedule({ timing, recurrence }))
       throw new Error(
@@ -270,11 +271,21 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
       );
     if (color !== null && !isProjectColor(color))
       throw new Error("El color del evento no es válido.");
-    return { title, notes, color, timing, recurrence };
+    if (reminderMinutes !== undefined && !isEventReminder(reminderMinutes))
+      throw new Error("El recordatorio del evento no es válido.");
+    return {
+      title,
+      notes,
+      color,
+      timing,
+      recurrence,
+      ...(reminderMinutes !== undefined && { reminderMinutes }),
+    };
   }
 
   async function saveEvent(id: Id, input: EventInput, previous?: EventInput) {
-    const { title, notes, color, timing, recurrence } = cleanEvent(input);
+    const { title, notes, color, timing, recurrence, reminderMinutes } =
+      cleanEvent(input);
     const schedule = { timing, recurrence };
     if (
       !previous ||
@@ -290,6 +301,8 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
       await setEventField(id, "notes", notes);
     if (color !== (previous?.color ?? null))
       await setEventField(id, "color", color);
+    if ((reminderMinutes ?? null) !== (previous?.reminderMinutes ?? null))
+      await setEventField(id, "reminderMinutes", reminderMinutes ?? null);
   }
 
   async function writeEventSegments(id: Id, segments: Json) {
@@ -368,7 +381,7 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
           const { source, previous } = await getOccurrence(id, originalStart);
           if (previous.cancelled)
             throw new Error("Esta ocurrencia ya está cancelada.");
-          const { title, notes, color, timing } = changes;
+          const { title, notes, color, timing, reminderMinutes } = changes;
           if (title !== undefined && title !== previous.title)
             await setExceptionField(
               id,
@@ -389,6 +402,20 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
             if (color !== null && !isProjectColor(color))
               throw new Error("El color del evento no es válido.");
             await setExceptionField(id, source, originalStart, "color", color);
+          }
+          if (
+            reminderMinutes !== undefined &&
+            reminderMinutes !== previous.reminderMinutes
+          ) {
+            if (!isEventReminder(reminderMinutes))
+              throw new Error("El recordatorio del evento no es válido.");
+            await setExceptionField(
+              id,
+              source,
+              originalStart,
+              "reminderMinutes",
+              reminderMinutes,
+            );
           }
           if (
             timing &&

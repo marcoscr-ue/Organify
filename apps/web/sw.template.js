@@ -60,7 +60,7 @@ self.addEventListener("message", (event) => {
 });
 
 const REMINDER_TITLE = "Organify";
-const REMINDER_BODY = "Tienes una tarea pendiente.";
+const REMINDER_BODY = "Tienes un recordatorio de Organify.";
 const DELIVERED_CACHE = "organify-push-delivered";
 
 function readPush(event) {

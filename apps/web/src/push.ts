@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import {
   pushReminderList,
+  eventRemindersStorageKey,
   remindersChangedEvent,
   remindersStorageKey,
 } from "./reminders";
@@ -114,7 +115,7 @@ function encodeKey(buffer: ArrayBuffer | null) {
 }
 
 const serverMissing =
-  "El proyecto de Supabase no tiene configurados los avisos push. Consulta DEVNOTES.md.";
+  "El proyecto de Supabase no tiene configurados los avisos push. Consulta docs/DEVNOTES.md.";
 
 function vapidKey(projectUrl: string) {
   let key = vapidKeys.get(projectUrl);
@@ -208,20 +209,27 @@ async function uploadReminders(
   saved: SavedPush,
   subscription: PushSubscription,
 ) {
-  const reminders = await pushReminderList();
-  const replace = (subscriptionId: string) =>
-    target.api.rpc("organify_push_replace", {
-      subscription: subscriptionId,
-      reminders,
-    });
-  let { error } = await replace(saved.subscriptionId);
-  if (isMissingSubscription(error)) {
-    // El servidor retiró la suscripción (p. ej. caducó): se registra otra vez.
-    ({ error } = await replace(
-      (await register(target, subscription)).subscriptionId,
-    ));
+  async function upload() {
+    const reminders = await pushReminderList();
+    const replace = (subscriptionId: string) =>
+      target.api.rpc("organify_push_replace", {
+        subscription: subscriptionId,
+        reminders,
+      });
+    let { error } = await replace(saved.subscriptionId);
+    if (isMissingSubscription(error)) {
+      // El servidor retiró la suscripción (p. ej. caducó): se registra otra vez.
+      ({ error } = await replace(
+        (await register(target, subscription)).subscriptionId,
+      ));
+    }
+    if (error) throw error;
   }
-  if (error) throw error;
+  // Read the current schedule after acquiring the lock, so another tab
+  // cannot finish uploading an older schedule after a cancellation.
+  if (navigator.locks)
+    await navigator.locks.request("organify-push-reminders", upload);
+  else await upload();
 }
 
 function pushMessage(error: unknown) {
@@ -229,7 +237,7 @@ function pushMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = error.code;
     if (code === "PGRST202" || code === "42883")
-      return "Falta la migración de avisos push en Supabase. Consulta DEVNOTES.md.";
+      return "Falta la migración de avisos push en Supabase. Consulta docs/DEVNOTES.md.";
   }
   return "No se pudieron actualizar los avisos push.";
 }
@@ -367,7 +375,11 @@ export function releasePush() {
 if (typeof window !== "undefined") {
   window.addEventListener(remindersChangedEvent, () => void refreshPush());
   window.addEventListener("storage", (event) => {
-    if (event.key === remindersStorageKey) void refreshPush();
+    if (
+      event.key === remindersStorageKey ||
+      event.key === eventRemindersStorageKey
+    )
+      void refreshPush();
   });
   window.addEventListener("online", () => {
     if (state.error) void refreshPush();

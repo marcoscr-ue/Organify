@@ -3,6 +3,7 @@ import {
   eventDuration,
   firstEventStart,
   isEventOccurrenceStart,
+  isEventReminder,
   isEventSchedule,
   isProjectColor,
   isRoutineDate,
@@ -45,7 +46,14 @@ function exceptionFields(state: Replica) {
     if (
       !start ||
       !field ||
-      !["title", "notes", "color", "timing", "cancelled"].includes(field)
+      ![
+        "title",
+        "notes",
+        "color",
+        "timing",
+        "cancelled",
+        "reminderMinutes",
+      ].includes(field)
     )
       continue;
     const byStart =
@@ -67,6 +75,9 @@ function readException(fields: Replica["fields"]) {
         break;
       case "notes":
         if (typeof value === "string") change.notes = value;
+        break;
+      case "reminderMinutes":
+        if (isEventReminder(value)) change.reminderMinutes = value;
         break;
       case "color":
         if (value === null || isProjectColor(value)) change.color = value;
@@ -112,6 +123,7 @@ function readRoot(key: string, state: Replica): CalendarEvent | undefined {
   const title = state.fields["event:title"]?.value;
   const notes = state.fields["event:notes"]?.value;
   const color = state.fields["event:color"]?.value;
+  const reminder = state.fields["event:reminderMinutes"]?.value;
   const schedule = state.fields["event:schedule"]?.value;
   if (typeof title !== "string" || !title.trim() || !isEventSchedule(schedule))
     return;
@@ -122,6 +134,7 @@ function readRoot(key: string, state: Replica): CalendarEvent | undefined {
     title,
     notes: typeof notes === "string" ? notes : "",
     color: isProjectColor(color) ? color : null,
+    ...(isEventReminder(reminder) && { reminderMinutes: reminder }),
     timing: schedule.timing,
     recurrence: schedule.recurrence,
   };
@@ -184,7 +197,12 @@ export function readEventGroup(key: string, state: Replica) {
     groupId &&
     Array.isArray(value) &&
     value.every((segment) => isSegment(segment, groupId))
-      ? value
+      ? value.map((segment) =>
+          segment.reminderMinutes === undefined &&
+          root.reminderMinutes !== undefined
+            ? { ...segment, reminderMinutes: root.reminderMinutes }
+            : segment,
+        )
       : [{ ...input, source: "", from: null, before: null }];
   const exceptions = exceptionFields(state);
   const events: CalendarEvent[] = segments.map(
@@ -231,15 +249,19 @@ function eventMetadata({
   title,
   notes,
   color,
-}: Partial<Pick<EventInput, "title" | "notes" | "color">>) {
+  reminderMinutes,
+}: Partial<Pick<EventInput, "title" | "notes" | "color" | "reminderMinutes">>) {
   if (title !== undefined && !title.trim())
     throw new Error("Escribe un título para el evento.");
   if (color !== undefined && color !== null && !isProjectColor(color))
     throw new Error("El color del evento no es válido.");
+  if (reminderMinutes !== undefined && !isEventReminder(reminderMinutes))
+    throw new Error("El recordatorio del evento no es válido.");
   return {
     ...(title !== undefined && { title: title.trim() }),
     ...(notes !== undefined && { notes: notes.trim() }),
     ...(color !== undefined && { color }),
+    ...(reminderMinutes !== undefined && { reminderMinutes }),
   };
 }
 
@@ -309,6 +331,9 @@ export function planEventFuture(
       title: selected.title,
       notes: selected.notes,
       color: selected.color,
+      ...(selected.reminderMinutes !== undefined && {
+        reminderMinutes: selected.reminderMinutes,
+      }),
       ...metadata,
       ...schedule,
       id: successorId,

@@ -67,6 +67,15 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.15.4",
+    date: "2026-11-25",
+    changes: [
+      introduced(
+        "Añade recordatorios a eventos únicos y repetibles. Los avisos se ajustan al mover o cancelar una ocurrencia.",
+      ),
+    ],
+  },
+  {
     version: "0.15.3",
     date: "2026-11-25",
     changes: [

@@ -111,7 +111,7 @@ La interfaz debe mostrar estas opciones solo cuando la acción se realiza sobre 
 
 ## Sincronización, almacenamiento y compatibilidad
 
-Antes de implementar, revisar VERSIONADO.md, el modelo actual de operaciones y el materializador local.
+Antes de implementar, revisar [VERSIONADO.md](VERSIONADO.md), el modelo actual de operaciones y el materializador local.
 
 En el dominio, los eventos tienen su propio modelo y repositorio. Para sincronizarlos, la primera opción es verificar el mecanismo de Rutinas. El protocolo 1 ya admite operaciones de campo `item` sobre identificadores reservados. Un espacio como `event/<uuid>` con campos propios permitiría conservar los datos en el diario y evitar su materialización como tareas. El cliente 0.14 rechaza `entity: "event"` al validar la operación descifrada, antes de materializarla.
 
@@ -181,13 +181,15 @@ El editor parte del primer inicio previsto del tramo seleccionado. Cambiar la fe
 ### 0.15.4 — Recordatorios
 
 - Añadir recordatorios opcionales para eventos únicos y recurrentes, reutilizando la infraestructura existente donde encaje.
-- Calcular el aviso a partir del inicio efectivo de la ocurrencia y reprogramarlo o retirarlo al moverla, cancelarla o cambiar la serie. Para los eventos de día completo queda por definir la hora del aviso.
+- Calcular el aviso a partir del inicio efectivo de la ocurrencia y reprogramarlo o retirarlo al moverla, cancelarla o cambiar la serie.
+
+Cada evento admite un recordatorio opcional. Una ocurrencia puede cambiar el adelanto o desactivar su aviso. En los eventos de día completo se toma como referencia las 09:00 del primer día en la zona del dispositivo. La preferencia se sincroniza cifrada. Cada dispositivo con permiso programa los avisos de los próximos 30 días y renueva esa ventana al usar la app. Los cambios hechos en otro dispositivo se aplican al sincronizar con él.
 
 **Criterios de aceptación**
 
 - Mover una ocurrencia reprograma su aviso y cancelar una ocurrencia o cortar la serie retira los avisos afectados. Los avisos push de la PWA conservan el contenido genérico.
 
-Las fases pueden ajustarse durante el desarrollo, pero no se debe publicar una operación de sincronización incompatible con clientes ya distribuidos sin completar primero la revisión de VERSIONADO.md y la estrategia de despliegue.
+Las fases pueden ajustarse durante el desarrollo, pero no se debe publicar una operación de sincronización incompatible con clientes ya distribuidos sin completar primero la revisión de [VERSIONADO.md](VERSIONADO.md) y la estrategia de despliegue.
 
 ## Fuera del alcance inicial
 
