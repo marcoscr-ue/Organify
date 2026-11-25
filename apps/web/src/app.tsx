@@ -20,7 +20,11 @@ import {
   type Project,
   type Status,
 } from "@organify/core";
-import { createTaskRepositories, type TaskSnapshot } from "@organify/storage";
+import {
+  createTaskRepositories,
+  type TaskRepositories,
+  type TaskSnapshot,
+} from "@organify/storage";
 import { Button } from "@/components/ui/button";
 import { Board } from "./board";
 import { CalendarView, type CalendarPosition } from "./calendar-view";
@@ -82,8 +86,10 @@ import {
 } from "./workspace-shortcuts";
 import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 import { inboxes, useViewPreferences } from "./view-preferences";
+import { useSharedWorkspaces, WorkspacePicker } from "./shared-workspaces";
+import type { WorkspaceSession } from "./workspace-connection";
 
-const repositories = createTaskRepositories();
+const personalRepositories = createTaskRepositories();
 const inboxIcons = {
   all: "inbox",
   today: "sun",
@@ -128,6 +134,8 @@ function dateLabel(
 
 function TaskDetail({
   item,
+  documents,
+  shared,
   projects,
   startEditing,
   save,
@@ -138,6 +146,8 @@ function TaskDetail({
   floating = false,
 }: {
   item: Item;
+  documents: TaskRepositories["documents"];
+  shared: boolean;
   projects: Project[];
   startEditing: boolean;
   save: (changes: ItemChanges) => Promise<boolean>;
@@ -181,7 +191,7 @@ function TaskDetail({
   const [reminderError, setReminderError] = useState("");
   const push = usePushState();
   const project = projects.find(({ id }) => id === item.projectId);
-  const reminder = reminderTime(item.id);
+  const reminder = shared ? undefined : reminderTime(item.id);
   const currentReminder = reminder
     ? localStamp(new Date(reminder)).slice(0, 16)
     : "";
@@ -541,53 +551,54 @@ function TaskDetail({
         <BlockNotes
           id={item.id}
           legacy={item.notes}
-          documents={repositories.documents}
+          documents={documents}
           editable={editing}
         />
-        {editing ? (
-          <div className="mt-4 grid gap-2 border-t border-line pt-4 text-sm">
-            <TaskField
-              label="Recordatorio en este dispositivo"
-              resetLabel="Quitar recordatorio"
-              disabled={!(reminderDraft ?? currentReminder) || saving}
-              onReset={() => {
-                setReminderDraft("");
-                setReminderError("");
-              }}
-            >
-              <input
-                className="field min-w-0"
-                type="datetime-local"
-                form={formId}
-                value={reminderDraft ?? currentReminder}
-                onChange={(event) => setReminderDraft(event.target.value)}
-                disabled={saving}
-              />
-            </TaskField>
-            <p className="text-muted">
-              {isAndroid
-                ? "Android puede retrasar el aviso para ahorrar batería."
-                : push.enabled
-                  ? "Recibirás el aviso aunque cierres la aplicación."
-                  : push.availability === "native"
-                    ? "Mantén la aplicación abierta para recibir el aviso."
-                    : "Mantén la aplicación abierta para recibir el aviso o activa los avisos con la app cerrada en Ajustes."}
-            </p>
-            {reminderError && (
-              <p role="alert" className="text-danger">
-                {reminderError}
+        {!shared &&
+          (editing ? (
+            <div className="mt-4 grid gap-2 border-t border-line pt-4 text-sm">
+              <TaskField
+                label="Recordatorio en este dispositivo"
+                resetLabel="Quitar recordatorio"
+                disabled={!(reminderDraft ?? currentReminder) || saving}
+                onReset={() => {
+                  setReminderDraft("");
+                  setReminderError("");
+                }}
+              >
+                <input
+                  className="field min-w-0"
+                  type="datetime-local"
+                  form={formId}
+                  value={reminderDraft ?? currentReminder}
+                  onChange={(event) => setReminderDraft(event.target.value)}
+                  disabled={saving}
+                />
+              </TaskField>
+              <p className="text-muted">
+                {isAndroid
+                  ? "Android puede retrasar el aviso para ahorrar batería."
+                  : push.enabled
+                    ? "Recibirás el aviso aunque cierres la aplicación."
+                    : push.availability === "native"
+                      ? "Mantén la aplicación abierta para recibir el aviso."
+                      : "Mantén la aplicación abierta para recibir el aviso o activa los avisos con la app cerrada en Ajustes."}
               </p>
-            )}
-          </div>
-        ) : (
-          reminder !== undefined && (
-            <p className="mt-3 flex items-center gap-2 rounded-md bg-panel p-3 text-sm text-muted">
-              <InterfaceIcon name="clock" className="size-4 shrink-0" />
-              Recordatorio en este dispositivo:{" "}
-              {new Date(reminder).toLocaleString("es")}
-            </p>
-          )
-        )}
+              {reminderError && (
+                <p role="alert" className="text-danger">
+                  {reminderError}
+                </p>
+              )}
+            </div>
+          ) : (
+            reminder !== undefined && (
+              <p className="mt-3 flex items-center gap-2 rounded-md bg-panel p-3 text-sm text-muted">
+                <InterfaceIcon name="clock" className="size-4 shrink-0" />
+                Recordatorio en este dispositivo:{" "}
+                {new Date(reminder).toLocaleString("es")}
+              </p>
+            )
+          ))}
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
           {editing ? (
             <>
@@ -645,6 +656,13 @@ function TaskDetail({
 
 export function App() {
   const [floating] = useState(readFloatingView);
+  const [workspaceSession, setWorkspaceSession] = useState<WorkspaceSession>();
+  const sharedWorkspaces = useSharedWorkspaces(workspaceSession);
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>();
+  const space = sharedWorkspaces.spaces.find(
+    ({ id }) => id === selectedSpaceId,
+  );
+  const repositories = space?.repositories ?? personalRepositories;
   const preferences = useWorkspacePreferences();
   const viewPreferences = useViewPreferences();
   const { startupView } = viewPreferences;
@@ -668,8 +686,21 @@ export function App() {
   const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
   const [renameId, setRenameId] = useState<Id>();
   const calendarPosition = useRef<CalendarPosition>(undefined);
-  const [snapshot, setSnapshot] = useState<TaskSnapshot>();
-  const [readError, setReadError] = useState(false);
+  const [personalSnapshot, setPersonalSnapshot] = useState<TaskSnapshot>();
+  const [personalReadError, setPersonalReadError] = useState(false);
+  const [sharedRead, setSharedRead] = useState<{
+    repositories: TaskRepositories;
+    snapshot?: TaskSnapshot;
+    error?: boolean;
+  }>();
+  const snapshot = space
+    ? sharedRead?.repositories === repositories
+      ? sharedRead.snapshot
+      : undefined
+    : personalSnapshot;
+  const readError = space
+    ? sharedRead?.repositories === repositories && sharedRead.error
+    : personalReadError;
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const floatingTasks = floating?.kind !== "task" ? floating : undefined;
@@ -707,14 +738,31 @@ export function App() {
   const [query, setQuery] = useState("");
   const [reminderAlert, setReminderAlert] = useState<Id>();
   const [eventReminderToOpen, setEventReminderToOpen] = useState<Id>();
-  const scheduledEvents = snapshot?.events;
+  const scheduledEvents = personalSnapshot?.events;
   const capture = useRef<HTMLInputElement>(null);
   const palette = useRef<HTMLDialogElement>(null);
 
   useEffect(
-    () => repositories.subscribe(setSnapshot, () => setReadError(true)),
+    () =>
+      personalRepositories.subscribe(setPersonalSnapshot, () =>
+        setPersonalReadError(true),
+      ),
     [],
   );
+
+  useEffect(() => {
+    if (repositories === personalRepositories) return;
+    return repositories.subscribe(
+      (snapshot) => setSharedRead({ repositories, snapshot }),
+      () => setSharedRead({ repositories, error: true }),
+    );
+  }, [repositories]);
+
+  useEffect(() => {
+    if (selectedSpaceId && !space) {
+      changeWorkspace();
+    }
+  }, [selectedSpaceId, space]);
 
   useEffect(() => {
     function syncTheme(event: StorageEvent) {
@@ -736,6 +784,7 @@ export function App() {
   useEffect(() => {
     if (!floating)
       return watchReminders(setReminderAlert, (id) => {
+        if (space) changeWorkspace();
         if (isEventReminderId(id)) {
           setEventReminderToOpen(id);
           return;
@@ -743,7 +792,7 @@ export function App() {
         setStartEditing(false);
         setSelectedId(id);
       });
-  }, [floating]);
+  }, [floating, space]);
   useEffect(() => {
     if (floating || !scheduledEvents) return;
     const events = scheduledEvents;
@@ -818,6 +867,24 @@ export function App() {
     setSelectedId(undefined);
   }
 
+  function changeWorkspace(id?: string) {
+    setSelectedSpaceId(id);
+    setProjectId(undefined);
+    setInbox("all");
+    setSection("tasks");
+    setSelectedId(undefined);
+    setEventAction(undefined);
+    setDeletion(undefined);
+    setRenameId(undefined);
+    setTaskSearch("");
+    setStatusFilter(undefined);
+    setInput("");
+    setProjectName("");
+    setProjectCreationFailed(false);
+    setError("");
+    setNotice("");
+  }
+
   function openRoutines() {
     navigation.current?.close();
     setSection("routines");
@@ -834,6 +901,7 @@ export function App() {
     setNotice("");
     setError("");
     if (
+      !space &&
       desktopWindow &&
       viewPreferences.tasksInWindows &&
       floating?.kind !== "task"
@@ -860,7 +928,7 @@ export function App() {
     setNotice("item" in target ? "Tarea eliminada." : "Tareas eliminadas.");
     let remindersCancelled = true;
     try {
-      await cancelReminders(ids);
+      if (!space) await cancelReminders(ids);
     } catch {
       remindersCancelled = false;
       setError(
@@ -961,7 +1029,7 @@ export function App() {
   const reminderTitle = eventAlert
     ? eventOccurrenceForReminder(scheduledEvents ?? [], reminderAlert!)?.event
         .title
-    : snapshot?.items.find((item) => item.id === reminderAlert)?.title;
+    : personalSnapshot?.items.find((item) => item.id === reminderAlert)?.title;
   const today = new Date(now);
   const todayItems =
     snapshot?.items.filter((item) => matchesInbox(item, "today", today)) ?? [];
@@ -1043,8 +1111,12 @@ export function App() {
         label: `Ir a ${label}`,
         run: () => navigate(id),
       })),
-      { label: "Ir a Rutinas", run: openRoutines },
-      { label: "Ir a Eventos", run: openEvents },
+      ...(!space
+        ? [
+            { label: "Ir a Rutinas", run: openRoutines },
+            { label: "Ir a Eventos", run: openEvents },
+          ]
+        : []),
       ...projects.map(({ id, name }) => ({
         label: `Abrir proyecto ${name}`,
         run: () => navigate("all", id),
@@ -1108,6 +1180,8 @@ export function App() {
     <TaskDetail
       key={selected.id}
       item={selected}
+      documents={repositories.documents}
+      shared={Boolean(space)}
       projects={projects}
       startEditing={startEditing}
       feedback={feedback}
@@ -1124,7 +1198,7 @@ export function App() {
       }}
       floating={floating?.kind === "task"}
       float={
-        desktopWindow && floating?.kind !== "task"
+        !space && desktopWindow && floating?.kind !== "task"
           ? () => void floatTask(selected, true)
           : undefined
       }
@@ -1319,7 +1393,9 @@ export function App() {
               </button>
             )}
             <div className="hidden min-w-0 items-center gap-2 text-xs text-muted md:flex md:flex-wrap">
-              <span className="hidden md:inline">Espacio de trabajo</span>
+              <span className="hidden md:inline">
+                {space?.name ?? "Personal"}
+              </span>
               <span aria-hidden="true" className="hidden md:inline">
                 /
               </span>
@@ -1358,7 +1434,8 @@ export function App() {
             <AppControls
               preferences={preferences}
               viewPreferences={viewPreferences}
-              store={repositories.sync}
+              store={personalRepositories.sync}
+              onWorkspaceSession={setWorkspaceSession}
               darkMode={darkMode}
               onThemeChange={changeTheme}
             />
@@ -1366,12 +1443,22 @@ export function App() {
           {desktopWindow && <DesktopWindowControls />}
         </header>
         <WorkspaceSidebar compact={compactNavigation} drawer={navigation}>
+          <WorkspacePicker
+            session={workspaceSession}
+            spaces={sharedWorkspaces.spaces}
+            space={space}
+            error={sharedWorkspaces.error}
+            status={space && sharedWorkspaces.statuses[space.membershipId]}
+            disabled={capturing || creatingProject}
+            onSelect={(id) => {
+              changeWorkspace(id);
+              navigation.current?.close();
+            }}
+            refresh={sharedWorkspaces.refresh}
+          />
           <div className="grid gap-2">
-            <h2 id="task-navigation-title" className="sidebar-label">
-              Espacio de trabajo
-            </h2>
             <nav
-              aria-labelledby="task-navigation-title"
+              aria-label="Vistas"
               className="grid min-w-0 content-start gap-1"
             >
               <details
@@ -1414,22 +1501,26 @@ export function App() {
                   ))}
                 </div>
               </details>
-              <button
-                type="button"
-                className="nav-link flex items-center gap-2.5"
-                aria-current={showRoutines ? "page" : undefined}
-                onClick={openRoutines}
-              >
-                <InterfaceIcon name="sparkles" /> Rutinas
-              </button>
-              <button
-                type="button"
-                className="nav-link flex items-center gap-2.5"
-                aria-current={showEvents ? "page" : undefined}
-                onClick={openEvents}
-              >
-                <InterfaceIcon name="calendar" /> Eventos
-              </button>
+              {!space && (
+                <button
+                  type="button"
+                  className="nav-link flex items-center gap-2.5"
+                  aria-current={showRoutines ? "page" : undefined}
+                  onClick={openRoutines}
+                >
+                  <InterfaceIcon name="sparkles" /> Rutinas
+                </button>
+              )}
+              {!space && (
+                <button
+                  type="button"
+                  className="nav-link flex items-center gap-2.5"
+                  aria-current={showEvents ? "page" : undefined}
+                  onClick={openEvents}
+                >
+                  <InterfaceIcon name="calendar" /> Eventos
+                </button>
+              )}
             </nav>
           </div>
           <div className="grid gap-2">
@@ -1494,7 +1585,7 @@ export function App() {
               {formatToday(today)}
             </time>
           </div>
-          {snapshot && isToday && (
+          {!space && snapshot && isToday && (
             <section className="focus-card" aria-labelledby="focus-title">
               <div className="relative z-10">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
@@ -1648,7 +1739,7 @@ export function App() {
                   </button>
                 ))}
               </div>
-              {desktopWindow && layout !== "list" && (
+              {!space && desktopWindow && layout !== "list" && (
                 <FloatButton
                   label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
                   onClick={() => void floatLayout()}
@@ -1772,7 +1863,7 @@ export function App() {
                                 <InterfaceIcon name="edit" />
                                 Renombrar tarea
                               </button>
-                              {desktopWindow && (
+                              {!space && desktopWindow && (
                                 <button
                                   type="button"
                                   className="nav-link flex w-full items-center gap-2 whitespace-nowrap"

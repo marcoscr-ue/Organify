@@ -126,10 +126,14 @@ function scheduleValue({ frequency, steps }: RoutineSchedule) {
   return { frequency, steps: steps.map(({ id, label }) => ({ id, label })) };
 }
 
-export function createTaskRepositories(name = "organify"): TaskRepositories {
+export function createTaskRepositories(
+  name = "organify",
+  sharedWorkspaceId?: Id,
+): TaskRepositories {
   const db = new OrganifyDatabase(name);
 
   async function workspaceId(): Promise<Id> {
+    if (sharedWorkspaceId) return sharedWorkspaceId;
     const account = await db.settings.get("account");
     if (account) return account.value;
     const existing = await db.settings.get("workspace");

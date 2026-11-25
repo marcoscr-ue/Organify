@@ -144,3 +144,55 @@ export function createOpCodec(userId: string, key: Uint8Array) {
     },
   };
 }
+
+export async function createWorkspaceSecret() {
+  await sodium.ready;
+  return sodium.randombytes_buf(32);
+}
+
+export async function encodeWorkspaceSecret(secret: Uint8Array) {
+  await sodium.ready;
+  return sodium.to_hex(secret);
+}
+
+export async function decodeWorkspaceSecret(encoded: string) {
+  await sodium.ready;
+  if (!/^[a-f0-9]{64}$/.test(encoded))
+    throw new Error("Código de invitación inválido.");
+  return sodium.from_hex(encoded);
+}
+
+export async function workspaceInvitationProof(secret: Uint8Array) {
+  await sodium.ready;
+  return sodium.to_hex(
+    sodium.crypto_generichash(32, "organify-invite-proof-v1", secret),
+  );
+}
+
+export async function sealWorkspaceValue(
+  value: string | Uint8Array,
+  key: Uint8Array,
+  workspaceId: string,
+  purpose: string,
+) {
+  await sodium.ready;
+  return seal(
+    value,
+    key,
+    JSON.stringify(["organify-workspace", 1, workspaceId, purpose]),
+  );
+}
+
+export async function openWorkspaceValue(
+  box: Box,
+  key: Uint8Array,
+  workspaceId: string,
+  purpose: string,
+) {
+  await sodium.ready;
+  return open(
+    box,
+    key,
+    JSON.stringify(["organify-workspace", 1, workspaceId, purpose]),
+  );
+}

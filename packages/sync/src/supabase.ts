@@ -77,3 +77,31 @@ export function supabaseAdapter(
     },
   };
 }
+
+export function workspaceAdapter(
+  client: SupabaseClient,
+  space: string,
+  membership: string,
+): SyncAdapter {
+  return {
+    async push(batch) {
+      const { error } = await client
+        .rpc("organify_workspace_push", { space, membership, batch })
+        .setHeader(protocolHeader, String(SYNC_PROTOCOL));
+      if (error) throw error;
+    },
+    async pull(after_cursor, page_size) {
+      const { data, error } = await client
+        .rpc("organify_workspace_pull", {
+          space,
+          membership,
+          after_cursor,
+          page_size,
+        })
+        .setHeader(protocolHeader, String(SYNC_PROTOCOL));
+      if (error) throw error;
+      return data as Entry[];
+    },
+    subscribe: () => () => {},
+  };
+}
