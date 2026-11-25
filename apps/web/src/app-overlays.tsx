@@ -68,6 +68,18 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.16.1",
+    date: "2026-11-25",
+    changes: [
+      improved(
+        "Comparte rutinas, sus checklists y eventos dentro de un espacio de trabajo.",
+      ),
+      updated(
+        "Vincula rutinas y eventos a un proyecto y consúltalos desde sus vistas.",
+      ),
+    ],
+  },
+  {
     version: "0.16.0",
     date: "2026-11-25",
     changes: [

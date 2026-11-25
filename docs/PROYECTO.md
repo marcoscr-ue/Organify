@@ -167,7 +167,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 - Auth de Supabase (email/contraseña o magic link) separada de la clave de cifrado: **la contraseña de login no debe ser la misma que deriva la clave**, o se deriva de forma independiente.
 - Búsqueda y filtros **solo en cliente** (el servidor no ve nada).
 - **Colaboración**. Cada espacio compartido tiene una clave aleatoria. Un código de un solo uso contiene el secreto que permite al invitado abrir esa clave. El servidor verifica una prueba derivada del código y el correo de la cuenta. Al aceptar, el invitado protege su copia de la clave con su clave de cuenta, lo que permite recuperarla en otros dispositivos.
-- **Jerarquía**. Los proyectos pertenecen a un espacio y las tareas pueden vincularse a un proyecto del mismo espacio. El espacio **Personal** incluye también las rutinas y los eventos. En un espacio compartido, el propietario gestiona el acceso y los miembros ven y editan los proyectos y tareas del espacio.
+- **Jerarquía**. Los proyectos pertenecen a un espacio. Las tareas, las rutinas y los eventos pueden vincularse a un proyecto del mismo espacio. Una serie de eventos comparte el vínculo de todos sus tramos. En un espacio compartido, el propietario gestiona el acceso y los miembros editan proyectos, tareas, rutinas y eventos. Los miembros de una rutina compartida trabajan sobre la misma checklist.
 - Usa libsodium para las operaciones sincronizadas y las envolturas de cuenta. El desbloqueo recordado usa una clave no exportable de Web Crypto para proteger una copia local de la clave maestra.
 
 ## 7. UX / Diseño

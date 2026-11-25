@@ -8,6 +8,7 @@ import {
 import {
   routineProgress,
   shiftRoutineDate,
+  type Project,
   type Routine,
   type RoutineCycle,
   type RoutineFrequency,
@@ -21,6 +22,7 @@ import {
   RenameDialog,
 } from "./app-overlays";
 import { InterfaceIcon } from "./interface-icon";
+import { ProjectSelect } from "./task-controls";
 import {
   useWorkspaceShortcuts,
   type ShortcutBindings,
@@ -169,12 +171,16 @@ function emptyStep() {
 
 function RoutineEditor({
   entry,
+  projects,
+  projectId,
   busy,
   error,
   save,
   close,
 }: {
   entry?: RoutineEntry;
+  projects: Project[];
+  projectId?: string;
   busy: boolean;
   error: string;
   save: (input: RoutineInput, original: RoutineInput) => void;
@@ -182,8 +188,12 @@ function RoutineEditor({
 }) {
   const [original] = useState<RoutineInput>(() =>
     entry
-      ? { name: entry.routine.name, ...entry.nextSchedule }
-      : { name: "", frequency: "daily", steps: [emptyStep()] },
+      ? {
+          name: entry.routine.name,
+          projectId: entry.routine.projectId,
+          ...entry.nextSchedule,
+        }
+      : { name: "", projectId, frequency: "daily", steps: [emptyStep()] },
   );
   const [draft, setDraft] = useState(original);
   function moveStep(index: number, direction: -1 | 1) {
@@ -218,6 +228,14 @@ function RoutineEditor({
             onChange={(event) =>
               setDraft({ ...draft, name: event.target.value })
             }
+          />
+        </label>
+        <label className="routine-field">
+          Proyecto
+          <ProjectSelect
+            value={draft.projectId ?? ""}
+            projects={projects}
+            onChange={(id) => setDraft({ ...draft, projectId: id || null })}
           />
         </label>
         <label className="routine-field">
@@ -331,6 +349,7 @@ function RoutineEditor({
 
 function RoutineDetail({
   entry,
+  projectName,
   busy,
   error,
   check,
@@ -341,6 +360,7 @@ function RoutineDetail({
   close,
 }: {
   entry: RoutineEntry;
+  projectName?: string;
   busy: boolean;
   error: string;
   check: (id: string, checked: boolean) => void;
@@ -361,6 +381,9 @@ function RoutineDetail({
       close={close}
     >
       <p className="mt-1 text-sm text-muted">{periodLabel(cycle)}</p>
+      {projectName && (
+        <p className="mt-1 text-sm text-muted">Proyecto · {projectName}</p>
+      )}
       {cycle.paused || !started ? (
         <p className="my-5 rounded-lg bg-panel p-3 text-sm text-muted">
           {cycle.paused
@@ -469,6 +492,8 @@ function RoutineDetail({
 export function RoutinesWorkspace({
   mode,
   routines,
+  projects,
+  projectId,
   now,
   store,
   openRoutines,
@@ -476,6 +501,8 @@ export function RoutinesWorkspace({
 }: {
   mode: "today" | "routines";
   routines: Routine[];
+  projects: Project[];
+  projectId?: string;
   now: number;
   store: TaskRepositories["routines"];
   openRoutines: () => void;
@@ -569,11 +596,13 @@ export function RoutinesWorkspace({
         <RoutineEditor
           key={actionEntry?.routine.id ?? "create"}
           entry={actionEntry}
+          projects={projects}
+          projectId={projectId}
           busy={busy}
           error={error}
           close={closeAction}
           save={async (input, original) => {
-            const { name, ...schedule } = input;
+            const { name, projectId, ...schedule } = input;
             const changedSchedule =
               schedule.frequency !== original.frequency ||
               JSON.stringify(schedule.steps) !== JSON.stringify(original.steps);
@@ -582,6 +611,10 @@ export function RoutinesWorkspace({
                 actionEntry
                   ? store.update(actionEntry.routine.id, {
                       name: name === original.name ? undefined : name,
+                      projectId:
+                        (projectId ?? null) === (original.projectId ?? null)
+                          ? undefined
+                          : (projectId ?? null),
                       schedule: changedSchedule ? schedule : undefined,
                     })
                   : store.create(input),
@@ -770,6 +803,9 @@ export function RoutinesWorkspace({
         <RoutineDetail
           key={selected.routine.id}
           entry={selected}
+          projectName={
+            projects.find(({ id }) => id === selected.routine.projectId)?.name
+          }
           busy={busy}
           error={error}
           check={(id, checked) => check(selected, id, checked)}

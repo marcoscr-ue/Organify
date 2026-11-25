@@ -12,16 +12,19 @@ export interface RoutineSchedule {
 
 export interface RoutineInput extends RoutineSchedule {
   name: string;
+  projectId?: string | null;
 }
 
 export interface RoutineChanges {
   name?: string;
   schedule?: RoutineSchedule;
+  projectId?: string | null;
 }
 
 export interface Routine {
   id: string;
   name: string;
+  projectId?: string;
   timeZone: string;
   startsOn: string;
   schedules: Record<string, RoutineSchedule>;

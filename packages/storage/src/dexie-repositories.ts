@@ -340,6 +340,10 @@ export function createTaskRepositories(
       create(input) {
         return db.transaction("rw", writeTables, async () => {
           const id = eventIdPrefix + v7();
+          if (input.projectId) {
+            await getProject(input.projectId);
+            await setEventField(id, "projectId", input.projectId);
+          }
           await saveEvent(id, input);
           return id;
         });
@@ -347,7 +351,16 @@ export function createTaskRepositories(
       update(id, changes) {
         return db.transaction("rw", writeTables, async () => {
           const { event, group } = await getSingleEvent(id);
-          const input = { ...event, ...changes, recurrence: null };
+          const { projectId, ...eventChanges } = changes;
+          if (
+            projectId !== undefined &&
+            projectId !== (event.projectId ?? null)
+          ) {
+            if (projectId !== null) await getProject(projectId);
+            await setEventField(eventGroupId(id), "projectId", projectId);
+          }
+          if (!Object.keys(eventChanges).length) return;
+          const input = { ...event, ...eventChanges, recurrence: null };
           if (!event.groupId) {
             await saveEvent(id, input, event);
             return;
@@ -363,7 +376,8 @@ export function createTaskRepositories(
               return {
                 ...definition,
                 ...clean,
-                ...(!changes.timing && duration !== undefined && { duration }),
+                ...(!eventChanges.timing &&
+                  duration !== undefined && { duration }),
               };
             }),
           );
@@ -474,8 +488,16 @@ export function createTaskRepositories(
             throw new Error(
               "La serie ha cambiado. Vuelve a revisar los cambios antes de confirmar.",
             );
-          if (!changes) await setEventField(eventGroupId(id), "removed", true);
-          else if (Object.keys(changes).length)
+          if (!changes) {
+            await setEventField(eventGroupId(id), "removed", true);
+            return;
+          }
+          const { projectId, ...seriesChanges } = changes;
+          if (projectId !== undefined) {
+            if (projectId !== null) await getProject(projectId);
+            await setEventField(eventGroupId(id), "projectId", projectId);
+          }
+          if (Object.keys(seriesChanges).length)
             await writeEventSegments(id, plan.segments);
         });
       },
@@ -489,6 +511,10 @@ export function createTaskRepositories(
         const schedule = cleanSchedule(input);
         return db.transaction("rw", writeTables, async () => {
           const id = "routine/" + v7();
+          if (input.projectId) {
+            await getProject(input.projectId);
+            await setRoutineField(id, "projectId", input.projectId);
+          }
           const timeZone =
             Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
           const date = routineDate(Date.now(), timeZone);
@@ -514,6 +540,14 @@ export function createTaskRepositories(
           const { cycle, nextSchedule } = routineProgress(routine, Date.now());
           if (name !== undefined && name !== routine.name)
             await setRoutineField(id, "name", name);
+          const { projectId } = changes;
+          if (
+            projectId !== undefined &&
+            projectId !== (routine.projectId ?? null)
+          ) {
+            if (projectId !== null) await getProject(projectId);
+            await setRoutineField(id, "projectId", projectId);
+          }
           if (!schedule) return;
           const next = scheduleValue(schedule);
           if (

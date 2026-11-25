@@ -820,6 +820,7 @@ export function App() {
   useEffect(() => {
     if (!eventReminderToOpen || !scheduledEvents) return;
     setSection("events");
+    setProjectId(undefined);
     setSelectedId(undefined);
     setEventAction(
       eventOccurrenceForReminder(scheduledEvents, eventReminderToOpen),
@@ -888,12 +889,14 @@ export function App() {
   function openRoutines() {
     navigation.current?.close();
     setSection("routines");
+    setProjectId(undefined);
     setSelectedId(undefined);
   }
 
   function openEvents() {
     navigation.current?.close();
     setSection("events");
+    setProjectId(undefined);
     setSelectedId(undefined);
   }
 
@@ -1024,6 +1027,10 @@ export function App() {
   }
 
   const projects = snapshot?.projects ?? [];
+  const scopedEvents =
+    (projectId
+      ? snapshot?.events.filter((event) => event.projectId === projectId)
+      : snapshot?.events) ?? [];
   const selected = snapshot?.items.find((item) => item.id === selectedId);
   const eventAlert = Boolean(reminderAlert && isEventReminderId(reminderAlert));
   const reminderTitle = eventAlert
@@ -1078,13 +1085,14 @@ export function App() {
     return true;
   });
   const projectById = new Map(projects.map((project) => [project.id, project]));
-  const heading = showEvents
-    ? "Eventos"
-    : showRoutines
-      ? "Rutinas"
-      : projectId
-        ? projectById.get(projectId)?.name
-        : inboxes.find(({ id }) => id === activeInbox)?.label;
+  const activeProject = projectId ? projectById.get(projectId) : undefined;
+  const heading =
+    activeProject?.name ??
+    (showEvents
+      ? "Eventos"
+      : showRoutines
+        ? "Rutinas"
+        : inboxes.find(({ id }) => id === activeInbox)?.label);
   const isToday = section === "tasks" && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
@@ -1111,12 +1119,8 @@ export function App() {
         label: `Ir a ${label}`,
         run: () => navigate(id),
       })),
-      ...(!space
-        ? [
-            { label: "Ir a Rutinas", run: openRoutines },
-            { label: "Ir a Eventos", run: openEvents },
-          ]
-        : []),
+      { label: "Ir a Rutinas", run: openRoutines },
+      { label: "Ir a Eventos", run: openEvents },
       ...projects.map(({ id, name }) => ({
         label: `Abrir proyecto ${name}`,
         run: () => navigate("all", id),
@@ -1281,7 +1285,7 @@ export function App() {
       {layout === "calendar" && (
         <CalendarView
           items={visible}
-          events={snapshot.events}
+          events={scopedEvents}
           projects={projectById}
           open={openTask}
           openEvent={setEventAction}
@@ -1316,6 +1320,9 @@ export function App() {
     <EventDialog
       action={eventAction}
       store={repositories.events}
+      projects={projects}
+      projectId={projectId}
+      reminders={!space}
       close={() => setEventAction(undefined)}
     />
   );
@@ -1501,26 +1508,22 @@ export function App() {
                   ))}
                 </div>
               </details>
-              {!space && (
-                <button
-                  type="button"
-                  className="nav-link flex items-center gap-2.5"
-                  aria-current={showRoutines ? "page" : undefined}
-                  onClick={openRoutines}
-                >
-                  <InterfaceIcon name="sparkles" /> Rutinas
-                </button>
-              )}
-              {!space && (
-                <button
-                  type="button"
-                  className="nav-link flex items-center gap-2.5"
-                  aria-current={showEvents ? "page" : undefined}
-                  onClick={openEvents}
-                >
-                  <InterfaceIcon name="calendar" /> Eventos
-                </button>
-              )}
+              <button
+                type="button"
+                className="nav-link flex items-center gap-2.5"
+                aria-current={showRoutines && !projectId ? "page" : undefined}
+                onClick={openRoutines}
+              >
+                <InterfaceIcon name="sparkles" /> Rutinas
+              </button>
+              <button
+                type="button"
+                className="nav-link flex items-center gap-2.5"
+                aria-current={showEvents && !projectId ? "page" : undefined}
+                onClick={openEvents}
+              >
+                <InterfaceIcon name="calendar" /> Eventos
+              </button>
             </nav>
           </div>
           <div className="grid gap-2">
@@ -1530,7 +1533,7 @@ export function App() {
                 <ProjectNavigation
                   key={project.id}
                   project={project}
-                  active={section === "tasks" && projectId === project.id}
+                  active={projectId === project.id}
                   open={() => navigate("all", project.id)}
                   save={(changes) =>
                     repositories.projects.update(project.id, changes)
@@ -1585,6 +1588,33 @@ export function App() {
               {formatToday(today)}
             </time>
           </div>
+          {activeProject && (
+            <nav
+              aria-label="Contenido del proyecto"
+              className="mb-4 flex flex-wrap gap-2"
+            >
+              {(
+                [
+                  { id: "tasks", label: "Tareas" },
+                  { id: "routines", label: "Rutinas" },
+                  { id: "events", label: "Eventos" },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="topbar-button px-3 aria-[current=page]:bg-tint aria-[current=page]:text-accent-ink"
+                  aria-current={section === id ? "page" : undefined}
+                  onClick={() => {
+                    setSection(id);
+                    setSelectedId(undefined);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+          )}
           {!space && snapshot && isToday && (
             <section className="focus-card" aria-labelledby="focus-title">
               <div className="relative z-10">
@@ -1630,7 +1660,8 @@ export function App() {
           {showEvents &&
             (snapshot ? (
               <EventsAgenda
-                events={snapshot.events}
+                key={projectId ?? "all"}
+                events={scopedEvents}
                 create={(date) => setEventAction({ date })}
                 open={setEventAction}
                 bindings={bindings}
@@ -1645,8 +1676,13 @@ export function App() {
           {showRoutines &&
             (snapshot ? (
               <RoutinesWorkspace
+                key={projectId ?? "all"}
                 mode="routines"
-                routines={snapshot.routines}
+                routines={snapshot.routines.filter(
+                  (routine) => !projectId || routine.projectId === projectId,
+                )}
+                projects={projects}
+                projectId={projectId}
                 now={now}
                 store={repositories.routines}
                 openRoutines={openRoutines}
@@ -1663,6 +1699,7 @@ export function App() {
             <RoutinesWorkspace
               mode="today"
               routines={snapshot.routines}
+              projects={projects}
               now={now}
               store={repositories.routines}
               openRoutines={openRoutines}
