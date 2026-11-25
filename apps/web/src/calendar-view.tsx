@@ -6,7 +6,10 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import {
+  eventOccurrences,
   taskDuration,
+  type CalendarEvent,
+  type EventOccurrence,
   type Id,
   type Item,
   type ItemChanges,
@@ -18,6 +21,7 @@ import {
   shiftSeries,
   taskRecurrence,
 } from "./calendar-schedule";
+import { calendarZone } from "./events";
 
 const plugins = [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin];
 const views = {
@@ -98,16 +102,20 @@ function taskEvents(
 
 export function CalendarView({
   items,
+  events,
   projects,
   open,
+  openEvent,
   reschedule,
   position,
   onPositionChange,
   expanded = false,
 }: {
   items: Item[];
+  events: CalendarEvent[];
   projects: ReadonlyMap<Id, Project>;
   open: (id: Id) => void;
+  openEvent: (occurrence: EventOccurrence) => void;
   reschedule: (id: Id, changes: ItemChanges) => Promise<boolean>;
   position?: CalendarPosition;
   onPositionChange?: (position: CalendarPosition) => void;
@@ -115,7 +123,7 @@ export function CalendarView({
 }) {
   return (
     <section
-      aria-label="Calendario de tareas"
+      aria-label="Calendario de tareas y eventos"
       className={`organify-calendar min-w-0 overflow-x-auto rounded-lg border border-line p-2 sm:p-3 ${expanded ? "h-full" : ""}`}
     >
       <FullCalendar
@@ -148,7 +156,35 @@ export function CalendarView({
         eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         events={({ start, end }, complete, fail) => {
           try {
-            complete(taskEvents(items, projects, start, end));
+            const commitments = eventOccurrences(
+              events,
+              start,
+              end,
+              calendarZone,
+            ).map((occurrence): EventInput => {
+              const { event } = occurrence;
+              const color = event.color ?? "var(--accent-ink)";
+              return {
+                id: occurrence.id,
+                title: event.title,
+                allDay: event.timing.allDay,
+                start: occurrence.start,
+                end: occurrence.end,
+                editable: false,
+                startEditable: false,
+                durationEditable: false,
+                interactive: true,
+                classNames: ["calendar-commitment"],
+                borderColor: color,
+                backgroundColor: `color-mix(in srgb, ${color} 18%, var(--paper))`,
+                textColor: "var(--foreground)",
+                extendedProps: { occurrence },
+              };
+            });
+            complete([
+              ...taskEvents(items, projects, start, end),
+              ...commitments,
+            ]);
           } catch (error) {
             fail(
               error instanceof Error
@@ -160,6 +196,9 @@ export function CalendarView({
         eventClick={({ event }) => {
           const taskId: unknown = event.extendedProps.taskId;
           if (typeof taskId === "string") open(taskId);
+          const occurrence = event.extendedProps.occurrence as
+            EventOccurrence | undefined;
+          if (occurrence) openEvent(occurrence);
         }}
         eventDidMount={({ el, event, isMirror }) => {
           const taskId: unknown = event.extendedProps.taskId;

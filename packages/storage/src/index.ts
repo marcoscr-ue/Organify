@@ -11,12 +11,15 @@ import type {
   Routine,
   RoutineChanges,
   RoutineInput,
+  CalendarEvent,
+  EventInput,
 } from "@organify/core";
 
 export interface TaskSnapshot {
   items: Item[];
   projects: Project[];
   routines: Routine[];
+  events: CalendarEvent[];
 }
 
 export interface SavedView {
@@ -30,6 +33,14 @@ export interface SavedView {
 }
 
 export interface TaskRepositories {
+  events: {
+    create(input: EventInput): Promise<Id>;
+    update(
+      id: Id,
+      changes: Partial<Omit<EventInput, "recurrence">>,
+    ): Promise<void>;
+    remove(id: Id): Promise<void>;
+  };
   routines: {
     create(input: RoutineInput): Promise<Id>;
     update(id: Id, changes: RoutineChanges): Promise<void>;

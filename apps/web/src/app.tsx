@@ -64,6 +64,7 @@ import {
 import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
 import { RoutinesWorkspace } from "./routines";
+import { EventDialog, EventsAgenda, type EventDialogAction } from "./events";
 import { applyTheme, readDarkMode, themeStorageKey } from "./theme";
 import { useTaskSwipe } from "./task-swipe";
 import {
@@ -646,9 +647,14 @@ export function App() {
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
-  const [showRoutines, setShowRoutines] = useState(
-    !floating && startupView === "routines",
+  const [section, setSection] = useState<"tasks" | "routines" | "events">(
+    !floating && (startupView === "routines" || startupView === "events")
+      ? startupView
+      : "tasks",
   );
+  const [eventAction, setEventAction] = useState<EventDialogAction>();
+  const showRoutines = section === "routines";
+  const showEvents = section === "events";
   const [tasksOpen, setTasksOpen] = useState(true);
   const [deletion, setDeletion] = useState<{ item: Item } | { ids: Id[] }>();
   const [renameId, setRenameId] = useState<Id>();
@@ -754,7 +760,7 @@ export function App() {
 
   function navigate(nextInbox: Inbox, nextProject?: Id) {
     navigation.current?.close();
-    setShowRoutines(false);
+    setSection("tasks");
     if (!nextProject) setTasksOpen(true);
     if (layout === "calendar" && nextInbox !== "all") setLayout("list");
     setInbox(nextInbox);
@@ -766,7 +772,13 @@ export function App() {
 
   function openRoutines() {
     navigation.current?.close();
-    setShowRoutines(true);
+    setSection("routines");
+    setSelectedId(undefined);
+  }
+
+  function openEvents() {
+    navigation.current?.close();
+    setSection("events");
     setSelectedId(undefined);
   }
 
@@ -929,7 +941,7 @@ export function App() {
     if (item) setDeletion({ item });
   });
   useWorkspaceShortcuts(bindings, (action) => {
-    if (!snapshot || floating?.kind === "task" || showRoutines) return;
+    if (!snapshot || floating?.kind === "task" || section !== "tasks") return;
     if (action === "create") {
       if (floatingTasks) setFloatingCaptureOpen(true);
       requestAnimationFrame(() => capture.current?.focus());
@@ -948,19 +960,21 @@ export function App() {
     return true;
   });
   const projectById = new Map(projects.map((project) => [project.id, project]));
-  const heading = showRoutines
-    ? "Rutinas"
-    : projectId
-      ? projectById.get(projectId)?.name
-      : inboxes.find(({ id }) => id === activeInbox)?.label;
-  const isToday = !showRoutines && !projectId && activeInbox === "today";
+  const heading = showEvents
+    ? "Eventos"
+    : showRoutines
+      ? "Rutinas"
+      : projectId
+        ? projectById.get(projectId)?.name
+        : inboxes.find(({ id }) => id === activeInbox)?.label;
+  const isToday = section === "tasks" && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
     [
       {
         label: "Capturar tarea",
         run: () => {
-          setShowRoutines(false);
+          setSection("tasks");
           requestAnimationFrame(() => capture.current?.focus());
         },
       },
@@ -971,7 +985,7 @@ export function App() {
       ...layouts.map(({ id, label }) => ({
         label: `Abrir ${label.toLocaleLowerCase("es")}`,
         run: () => {
-          setShowRoutines(false);
+          setSection("tasks");
           setLayout(id);
         },
       })),
@@ -980,6 +994,7 @@ export function App() {
         run: () => navigate(id),
       })),
       { label: "Ir a Rutinas", run: openRoutines },
+      { label: "Ir a Eventos", run: openEvents },
       ...projects.map(({ id, name }) => ({
         label: `Abrir proyecto ${name}`,
         run: () => navigate("all", id),
@@ -1142,8 +1157,10 @@ export function App() {
       {layout === "calendar" && (
         <CalendarView
           items={visible}
+          events={snapshot.events}
           projects={projectById}
           open={openTask}
+          openEvent={setEventAction}
           reschedule={(id, changes) =>
             write(
               () => repositories.items.update(id, changes),
@@ -1158,6 +1175,14 @@ export function App() {
         />
       )}
     </>
+  );
+
+  const eventDialog = eventAction && (
+    <EventDialog
+      action={eventAction}
+      store={repositories.events}
+      close={() => setEventAction(undefined)}
+    />
   );
 
   if (floating?.kind === "task") {
@@ -1207,6 +1232,7 @@ export function App() {
         {taskDetail}
         {renameDialog}
         {deleteConfirmation}
+        {eventDialog}
       </main>
     );
   }
@@ -1306,7 +1332,7 @@ export function App() {
                       type="button"
                       key={id}
                       aria-current={
-                        !showRoutines && !projectId && activeInbox === id
+                        section === "tasks" && !projectId && activeInbox === id
                           ? "page"
                           : undefined
                       }
@@ -1335,6 +1361,14 @@ export function App() {
               >
                 <InterfaceIcon name="sparkles" /> Rutinas
               </button>
+              <button
+                type="button"
+                className="nav-link flex items-center gap-2.5"
+                aria-current={showEvents ? "page" : undefined}
+                onClick={openEvents}
+              >
+                <InterfaceIcon name="calendar" /> Eventos
+              </button>
             </nav>
           </div>
           <div className="grid gap-2">
@@ -1344,7 +1378,7 @@ export function App() {
                 <ProjectNavigation
                   key={project.id}
                   project={project}
-                  active={!showRoutines && projectId === project.id}
+                  active={section === "tasks" && projectId === project.id}
                   open={() => navigate("all", project.id)}
                   save={(changes) =>
                     repositories.projects.update(project.id, changes)
@@ -1441,6 +1475,21 @@ export function App() {
               </div>
             </section>
           )}
+          {showEvents &&
+            (snapshot ? (
+              <EventsAgenda
+                events={snapshot.events}
+                create={(date) => setEventAction({ date })}
+                open={setEventAction}
+                bindings={bindings}
+              />
+            ) : (
+              <p className="text-sm text-muted" role="status">
+                {readError
+                  ? "No se pudieron cargar los eventos."
+                  : "Cargando eventos."}
+              </p>
+            ))}
           {showRoutines &&
             (snapshot ? (
               <RoutinesWorkspace
@@ -1469,7 +1518,7 @@ export function App() {
             />
           )}
           <section
-            hidden={showRoutines}
+            hidden={section !== "tasks"}
             className="task-panel"
             aria-labelledby="task-panel-title"
           >
@@ -1705,6 +1754,7 @@ export function App() {
       {taskDetail}
       {renameDialog}
       {deleteConfirmation}
+      {eventDialog}
 
       {reminderAlert && (
         <div className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-xl border border-line bg-paper p-3 shadow-lg">
