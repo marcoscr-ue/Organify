@@ -31,7 +31,12 @@ import {
   record,
   recordField,
 } from "./journal";
-import type { EventFutureChanges, SavedView, TaskRepositories } from "./index";
+import type {
+  EventFutureChanges,
+  EventSeriesChanges,
+  SavedView,
+  TaskRepositories,
+} from "./index";
 import { readRoutine, routineKeyPrefix } from "./routine-journal";
 import {
   eventExceptionPrefix,
@@ -40,6 +45,7 @@ import {
   eventKeyPrefix,
   eventSegmentsField,
   planEventFuture,
+  planEventSeries,
   readEventGroup,
 } from "./event-journal";
 
@@ -308,6 +314,10 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
     );
   }
 
+  async function planSeries(id: Id, changes: EventSeriesChanges | null) {
+    return planEventSeries(await getEventGroup(id), id, changes, v7());
+  }
+
   return {
     events: {
       create(input) {
@@ -420,6 +430,21 @@ export function createTaskRepositories(name = "organify"): TaskRepositories {
               "La serie ha cambiado. Vuelve a revisar los cambios antes de confirmar.",
             );
           if (!changes || Object.keys(changes).length)
+            await writeEventSegments(id, plan.segments);
+        });
+      },
+      async previewSeries(id, changes) {
+        return (await planSeries(id, changes)).impact;
+      },
+      changeSeries(id, changes, revision) {
+        return db.transaction("rw", writeTables, async () => {
+          const plan = await planSeries(id, changes);
+          if (plan.impact.revision !== revision)
+            throw new Error(
+              "La serie ha cambiado. Vuelve a revisar los cambios antes de confirmar.",
+            );
+          if (!changes) await setEventField(eventGroupId(id), "removed", true);
+          else if (Object.keys(changes).length)
             await writeEventSegments(id, plan.segments);
         });
       },

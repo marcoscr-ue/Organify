@@ -220,6 +220,13 @@ export function plannedEventTiming(
   return { ...timing, start, end };
 }
 
+export function firstEventStart({
+  from,
+  timing,
+}: Pick<CalendarEvent, "from" | "timing">) {
+  return from && from > timing.start ? from : timing.start;
+}
+
 export function occurrenceTiming(
   timing: EventTiming,
   start: Date,
