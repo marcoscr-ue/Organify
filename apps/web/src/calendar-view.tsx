@@ -7,9 +7,11 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import {
   eventOccurrences,
+  occurrenceTiming,
   taskDuration,
   type CalendarEvent,
   type EventOccurrence,
+  type EventTiming,
   type Id,
   type Item,
   type ItemChanges,
@@ -107,6 +109,7 @@ export function CalendarView({
   open,
   openEvent,
   reschedule,
+  rescheduleOccurrence,
   position,
   onPositionChange,
   expanded = false,
@@ -117,6 +120,10 @@ export function CalendarView({
   open: (id: Id) => void;
   openEvent: (occurrence: EventOccurrence) => void;
   reschedule: (id: Id, changes: ItemChanges) => Promise<boolean>;
+  rescheduleOccurrence: (
+    occurrence: EventOccurrence,
+    timing: EventTiming,
+  ) => Promise<boolean>;
   position?: CalendarPosition;
   onPositionChange?: (position: CalendarPosition) => void;
   expanded?: boolean;
@@ -170,8 +177,7 @@ export function CalendarView({
                 allDay: event.timing.allDay,
                 start: occurrence.start,
                 end: occurrence.end,
-                editable: false,
-                startEditable: false,
+                startEditable: Boolean(event.recurrence),
                 durationEditable: false,
                 interactive: true,
                 classNames: ["calendar-commitment"],
@@ -206,6 +212,28 @@ export function CalendarView({
             el.dataset.taskShortcut = taskId;
         }}
         eventDrop={async ({ event, oldEvent, revert }) => {
+          const occurrence = oldEvent.extendedProps.occurrence as
+            EventOccurrence | undefined;
+          if (occurrence) {
+            if (!occurrence.event.recurrence || !event.start) {
+              revert();
+              return;
+            }
+            const end = event.end ?? new Date(event.start);
+            if (!event.end) {
+              if (event.allDay) end.setDate(end.getDate() + 1);
+              else end.setTime(+end + 3_600_000);
+            }
+            const timing = occurrenceTiming(
+              occurrence.event.timing,
+              event.start,
+              end,
+              event.allDay,
+              calendarZone,
+            );
+            if (!(await rescheduleOccurrence(occurrence, timing))) revert();
+            return;
+          }
           const item = items.find(
             ({ id }) => id === event.extendedProps.taskId,
           );

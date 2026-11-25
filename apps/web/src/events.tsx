@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   eventFrequencies,
   eventOccurrences,
+  occurrenceTiming,
   shiftRoutineDate,
   type CalendarEvent,
   type EventInput,
@@ -167,6 +168,26 @@ export function EventDialog({
   const occurrence = "event" in action ? action : undefined;
   const date = "date" in action ? action.date : undefined;
   const original = occurrence?.event;
+  const recurring = Boolean(original?.recurrence);
+  const editorEvent =
+    occurrence && recurring
+      ? {
+          ...occurrence.event,
+          timing: occurrence.event.timing.allDay
+            ? {
+                allDay: true as const,
+                start: occurrence.start,
+                end: occurrence.end,
+              }
+            : occurrenceTiming(
+                occurrence.event.timing,
+                new Date(occurrence.start),
+                new Date(occurrence.end),
+                false,
+                calendarZone,
+              ),
+        }
+      : original;
   const [mode, setMode] = useState(occurrence ? "detail" : "editor");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -197,17 +218,24 @@ export function EventDialog({
   }
 
   function save(input: EventInput) {
-    if (!original) return write(() => store.create(input));
+    if (!editorEvent) return write(() => store.create(input));
     const { title, notes, color, timing } = input;
-    return write(() =>
-      store.update(original.id, {
-        ...(title !== original.title && { title }),
-        ...(notes !== original.notes && { notes }),
-        ...(color !== original.color && { color }),
-        ...(JSON.stringify(timing) !== JSON.stringify(original.timing) && {
-          timing,
-        }),
+    const changes = {
+      ...(title !== editorEvent.title && { title }),
+      ...(notes !== editorEvent.notes && { notes }),
+      ...(color !== editorEvent.color && { color }),
+      ...(JSON.stringify(timing) !== JSON.stringify(editorEvent.timing) && {
+        timing,
       }),
+    };
+    return write(() =>
+      recurring && occurrence
+        ? store.updateOccurrence(
+            editorEvent.id,
+            occurrence.originalStart,
+            changes,
+          )
+        : store.update(editorEvent.id, changes),
     );
   }
 
@@ -229,7 +257,9 @@ export function EventDialog({
           <h2 id={titleId} className="wrap-anywhere text-xl font-semibold">
             {mode === "editor"
               ? original
-                ? "Editar evento"
+                ? recurring
+                  ? "Editar solo este evento"
+                  : "Editar evento"
                 : "Nuevo evento"
               : original?.title}
           </h2>
@@ -237,7 +267,7 @@ export function EventDialog({
         </div>
         {mode === "editor" && (
           <EventEditor
-            original={original}
+            original={editorEvent}
             date={date}
             busy={busy}
             save={save}
@@ -265,23 +295,27 @@ export function EventDialog({
                 {occurrence.event.notes}
               </p>
             )}
-            {!occurrence.event.recurrence && (
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setMode("editor")}>Editar</Button>
-                <button
-                  type="button"
-                  className="topbar-button px-3 text-danger"
-                  onClick={() => setMode("delete")}
-                >
-                  Borrar
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => setMode("editor")}>
+                {recurring ? "Editar solo este evento" : "Editar"}
+              </Button>
+              <button
+                type="button"
+                className="topbar-button px-3 text-danger"
+                onClick={() => setMode("delete")}
+              >
+                {recurring ? "Cancelar solo este evento" : "Borrar"}
+              </button>
+            </div>
           </div>
         )}
         {mode === "delete" && original && (
           <div className="mt-3 grid gap-3">
-            <p>¿Quieres borrar este evento?</p>
+            <p>
+              {recurring
+                ? "¿Quieres cancelar solo esta ocurrencia? El resto de la serie se mantiene."
+                : "¿Quieres borrar este evento?"}
+            </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -297,9 +331,18 @@ export function EventDialog({
               <Button
                 className="bg-danger text-white hover:bg-danger/90"
                 disabled={busy}
-                onClick={() => void write(() => store.remove(original.id))}
+                onClick={() =>
+                  void write(() =>
+                    recurring && occurrence
+                      ? store.cancelOccurrence(
+                          original.id,
+                          occurrence.originalStart,
+                        )
+                      : store.remove(original.id),
+                  )
+                }
               >
-                Borrar evento
+                {recurring ? "Cancelar esta ocurrencia" : "Borrar evento"}
               </Button>
             </div>
           </div>
@@ -412,8 +455,11 @@ function EventEditor({
               className={field}
               onChange={(event) => {
                 const value = event.target.value;
+                const shift =
+                  (Date.parse(value) - Date.parse(startDate)) / 86_400_000;
                 setStartDate(value);
-                if (value > endDate) setEndDate(value);
+                if (Number.isFinite(shift) && endDate)
+                  setEndDate(shiftRoutineDate(endDate, shift));
               }}
             />
           </label>
