@@ -171,6 +171,8 @@ El corte usa el inicio previsto en la zona de la serie. Si se cambia la programa
 - Aplicar solo los campos editados y mostrar la confirmación de cambios que afecten a la programación de varios tramos.
 - Revisar accesibilidad y claridad de los diálogos de alcance.
 
+El editor parte del primer inicio previsto del tramo seleccionado. Cambiar la fecha de inicio desplaza las fechas de todos los tramos el mismo número de días. Los campos de hora, duración y regla que se editan se aplican a los tramos correspondientes. La fecha final escrita se aplica a toda la serie y puede retirar tramos posteriores al límite. Para dejar un solo evento a partir de una ocurrencia, se elige «Sin repetición» en «Este evento y los siguientes».
+
 **Criterios de aceptación**
 
 - Renombrar un grupo con dos horarios distintos conserva ambos horarios y los cambios puntuales de sus excepciones.

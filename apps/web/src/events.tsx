@@ -2,6 +2,8 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   eventFrequencies,
   eventOccurrences,
+  firstEventStart,
+  isEventSchedule,
   occurrenceTiming,
   plannedEventTiming,
   shiftRoutineDate,
@@ -9,10 +11,12 @@ import {
   type EventInput,
   type EventOccurrence,
   type EventRecurrence,
+  type EventTiming,
 } from "@organify/core";
 import type {
   EventFutureChanges,
   EventFutureImpact,
+  EventSeriesChanges,
   TaskRepositories,
 } from "@organify/storage";
 import { Button } from "@/components/ui/button";
@@ -57,6 +61,33 @@ function occurrenceLabel({ event, start, end }: EventOccurrence) {
 function plannedLabel(start: string) {
   const date = dayLabel.format(new Date(start.slice(0, 10)));
   return start.length > 10 ? `${date} a las ${start.slice(11)}` : date;
+}
+
+const eventScopes = {
+  single: "Solo este evento",
+  future: "Este evento y los siguientes",
+  series: "Todos los eventos",
+};
+type EventScope = keyof typeof eventScopes;
+
+function seriesTimingChange(previous: EventTiming, next: EventTiming) {
+  const day = (stamp: string) => Date.parse(stamp.slice(0, 10));
+  const duration = (timing: EventTiming) => {
+    const suffix = timing.allDay ? "" : "Z";
+    return Date.parse(timing.end + suffix) - Date.parse(timing.start + suffix);
+  };
+  const milliseconds = duration(next);
+  const startTime = next.start.slice(11);
+  return {
+    dayShift: (day(next.start) - day(previous.start)) / 86_400_000,
+    ...(next.allDay !== previous.allDay && { allDay: next.allDay }),
+    ...(!next.allDay &&
+      startTime !== previous.start.slice(11) && { startTime }),
+    ...(next.allDay !== previous.allDay || milliseconds !== duration(previous)
+      ? { duration: { allDay: next.allDay, milliseconds } }
+      : {}),
+    ...(!next.allDay && previous.allDay && { timeZone: next.timeZone }),
+  };
 }
 
 export function EventsAgenda({
@@ -179,27 +210,30 @@ export function EventDialog({
   const date = "date" in action ? action.date : undefined;
   const original = occurrence?.event;
   const recurring = Boolean(original?.recurrence);
-  const [scope, setScope] = useState<"single" | "future">("single");
+  const [scope, setScope] = useState<EventScope>("single");
   const [mode, setMode] = useState<
     | "detail"
     | "editor"
     | "choose-edit"
     | "choose-delete"
     | "delete"
-    | "confirm-future"
+    | "confirm-scope"
   >(occurrence ? "detail" : "editor");
   const [confirmation, setConfirmation] = useState<{
-    changes: EventFutureChanges | null;
+    editing: boolean;
     impact: EventFutureImpact;
+    commit: (revision: string) => Promise<void>;
   }>();
   const [draft, setDraft] = useState<EventInput>();
   const editorEvent =
-    occurrence && scope === "future"
+    occurrence && scope !== "single"
       ? {
           ...occurrence.segment,
           timing: plannedEventTiming(
             occurrence.segment.timing,
-            occurrence.originalStart,
+            scope === "series"
+              ? firstEventStart(occurrence.segment)
+              : occurrence.originalStart,
           ),
         }
       : occurrence && recurring
@@ -261,27 +295,49 @@ export function EventDialog({
     });
   }
 
+  function previewScope(
+    editing: boolean,
+    preview: () => Promise<EventFutureImpact>,
+    commit: (revision: string) => Promise<void>,
+  ) {
+    return act(async () => {
+      const impact = await preview();
+      if (impact.replacesSchedule) {
+        setConfirmation({ editing, impact, commit });
+        setMode("confirm-scope");
+      } else {
+        await commit(impact.revision);
+        close();
+      }
+    });
+  }
+
   function previewFuture(changes: EventFutureChanges | null) {
     if (!occurrence) return Promise.resolve();
     const { id } = occurrence.segment;
     const { originalStart } = occurrence;
-    return act(async () => {
-      const impact = await store.previewFuture(id, originalStart, changes);
-      if (impact.replacesSchedule) {
-        setConfirmation({ changes, impact });
-        setMode("confirm-future");
-      } else {
-        await store.changeFuture(id, originalStart, changes, impact.revision);
-        close();
-      }
-    });
+    return previewScope(
+      changes !== null,
+      () => store.previewFuture(id, originalStart, changes),
+      (revision) => store.changeFuture(id, originalStart, changes, revision),
+    );
+  }
+
+  function previewSeries(changes: EventSeriesChanges | null) {
+    if (!occurrence) return Promise.resolve();
+    const { id } = occurrence.segment;
+    return previewScope(
+      changes !== null,
+      () => store.previewSeries(id, changes),
+      (revision) => store.changeSeries(id, changes, revision),
+    );
   }
 
   function save(input: EventInput) {
     if (!editorEvent) return write(() => store.create(input));
     const { title, notes, color, timing } = input;
     const previousTiming = editorEvent.timing;
-    const changes: EventFutureChanges = {
+    const changes = {
       ...(title !== editorEvent.title && { title }),
       ...(notes !== editorEvent.notes && { notes }),
       ...(color !== editorEvent.color && { color }),
@@ -294,17 +350,38 @@ export function EventDialog({
         timing,
       }),
     };
+    if (scope === "series" && input.recurrence && editorEvent.recurrence) {
+      if (!isEventSchedule({ timing, recurrence: null })) {
+        setError("Comprueba las fechas y las horas del evento.");
+        return Promise.resolve();
+      }
+      const { timing: changedTiming, ...metadata } = changes;
+      const series: EventSeriesChanges = metadata;
+      const { frequency, interval, until } = input.recurrence;
+      const previous = editorEvent.recurrence;
+      const recurrence = {
+        ...(frequency !== previous.frequency && { frequency }),
+        ...(interval !== previous.interval && { interval }),
+        ...(until !== previous.until && { until }),
+      };
+      if (changedTiming)
+        series.timing = seriesTimingChange(previousTiming, timing);
+      if (Object.keys(recurrence).length) series.recurrence = recurrence;
+      setDraft(input);
+      return previewSeries(series);
+    }
     if (scope === "future") {
       const { recurrence } = input;
       const previous = editorEvent.recurrence;
-      if (
+      const recurrenceChanged =
         recurrence?.frequency !== previous?.frequency ||
         recurrence?.interval !== previous?.interval ||
-        recurrence?.until !== previous?.until
-      )
-        changes.recurrence = recurrence;
+        recurrence?.until !== previous?.until;
       setDraft(input);
-      return previewFuture(changes);
+      return previewFuture({
+        ...changes,
+        ...(recurrenceChanged && { recurrence }),
+      });
     }
     return write(() =>
       recurring && occurrence
@@ -317,14 +394,32 @@ export function EventDialog({
     );
   }
 
-  function choose(next: "single" | "future") {
+  function choose(next: EventScope) {
     setScope(next);
     setError("");
     setDraft(undefined);
     if (mode === "choose-edit") setMode("editor");
     else if (next === "single") setMode("delete");
-    else void previewFuture(null);
+    else if (next === "future") void previewFuture(null);
+    else void previewSeries(null);
   }
+
+  const titles = {
+    detail: original?.title,
+    editor: original
+      ? recurring
+        ? `Editar ${eventScopes[scope].toLocaleLowerCase("es")}`
+        : "Editar evento"
+      : "Nuevo evento",
+    "choose-edit": "Editar evento repetible",
+    "choose-delete": "Borrar evento repetible",
+    delete: original?.title,
+    "confirm-scope": confirmation?.editing
+      ? "Confirmar cambio de programación"
+      : scope === "series"
+        ? "Borrar toda la serie"
+        : "Borrar este evento y los siguientes",
+  };
 
   return (
     <dialog
@@ -347,23 +442,7 @@ export function EventDialog({
             tabIndex={-1}
             className="wrap-anywhere text-xl font-semibold"
           >
-            {mode === "editor"
-              ? original
-                ? recurring
-                  ? scope === "future"
-                    ? "Editar este evento y los siguientes"
-                    : "Editar solo este evento"
-                  : "Editar evento"
-                : "Nuevo evento"
-              : mode === "choose-edit"
-                ? "Editar evento repetible"
-                : mode === "choose-delete"
-                  ? "Borrar evento repetible"
-                  : mode === "confirm-future"
-                    ? confirmation?.changes
-                      ? "Confirmar cambio de programación"
-                      : "Borrar este evento y los siguientes"
-                    : original?.title}
+            {titles[mode]}
           </h2>
           <CloseDialogButton onClick={close} disabled={busy} />
         </div>
@@ -375,10 +454,18 @@ export function EventDialog({
                 {plannedLabel(occurrence.originalStart)}.
               </p>
             )}
+            {scope === "series" && (
+              <p className="mt-3 text-sm text-muted">
+                Los campos que cambies se aplicarán a toda la serie. Si cambias
+                la fecha de inicio, todas las fechas se desplazarán la misma
+                cantidad de días.
+              </p>
+            )}
             <EventEditor
               original={editorEvent && { ...editorEvent, ...draft }}
               date={date}
-              editRecurrence={!editorEvent || scope === "future"}
+              editRecurrence={!editorEvent || scope !== "single"}
+              wholeSeries={scope === "series"}
               busy={busy}
               save={save}
             />
@@ -387,21 +474,21 @@ export function EventDialog({
         {(mode === "choose-edit" || mode === "choose-delete") && (
           <div className="mt-4 grid gap-3">
             <p>¿A qué ocurrencias quieres aplicar el cambio?</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2">
+              {(Object.keys(eventScopes) as EventScope[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className="topbar-button min-h-10 justify-start px-3 text-left"
+                  disabled={busy}
+                  onClick={() => choose(option)}
+                >
+                  {eventScopes[option]}
+                </button>
+              ))}
               <button
                 type="button"
-                className="topbar-button px-3"
-                disabled={busy}
-                onClick={() => choose("single")}
-              >
-                Solo este evento
-              </button>
-              <Button disabled={busy} onClick={() => choose("future")}>
-                Este evento y los siguientes
-              </Button>
-              <button
-                type="button"
-                className="topbar-button px-3"
+                className="topbar-button justify-self-start px-3"
                 disabled={busy}
                 onClick={() => {
                   setError("");
@@ -413,11 +500,16 @@ export function EventDialog({
             </div>
           </div>
         )}
-        {mode === "confirm-future" && occurrence && confirmation && (
+        {mode === "confirm-scope" && confirmation && (
           <div className="mt-4 grid gap-3">
             <p>
-              {confirmation.changes ? "Se reemplazará" : "Se retirará"} la
-              programación de estos tramos desde las fechas indicadas:
+              {confirmation.editing
+                ? scope === "series"
+                  ? "Cambiará la programación de estos tramos."
+                  : "Se reemplazará la programación desde las fechas indicadas."
+                : scope === "series"
+                  ? "Se borrarán todos los tramos de la serie, incluidas las ocurrencias desplazadas."
+                  : "Se retirará la programación desde las fechas indicadas."}
             </p>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               {confirmation.impact.segments.map(({ title, from }, index) => (
@@ -438,30 +530,29 @@ export function EventDialog({
                 disabled={busy}
                 onClick={() => {
                   setError("");
-                  setMode(confirmation.changes ? "editor" : "choose-delete");
+                  setMode(confirmation.editing ? "editor" : "choose-delete");
                 }}
               >
                 Volver
               </button>
               <Button
                 className={
-                  confirmation.changes
+                  confirmation.editing
                     ? undefined
                     : "bg-danger text-white hover:bg-danger/90"
                 }
                 disabled={busy}
                 onClick={() =>
                   void write(() =>
-                    store.changeFuture(
-                      occurrence.segment.id,
-                      occurrence.originalStart,
-                      confirmation.changes,
-                      confirmation.impact.revision,
-                    ),
+                    confirmation.commit(confirmation.impact.revision),
                   )
                 }
               >
-                {confirmation.changes ? "Confirmar cambios" : "Borrar eventos"}
+                {confirmation.editing
+                  ? "Confirmar cambios"
+                  : scope === "series"
+                    ? "Borrar serie"
+                    : "Borrar eventos"}
               </Button>
             </div>
           </div>
@@ -556,12 +647,14 @@ function EventEditor({
   original,
   date,
   editRecurrence,
+  wholeSeries,
   busy,
   save,
 }: {
   original?: CalendarEvent;
   date?: string;
   editRecurrence: boolean;
+  wholeSeries: boolean;
   busy: boolean;
   save: (input: EventInput) => Promise<void>;
 }) {
@@ -711,7 +804,7 @@ function EventEditor({
                 );
               }}
             >
-              <option value="">Sin repetición</option>
+              {!wholeSeries && <option value="">Sin repetición</option>}
               {eventFrequencies.map((entry) => (
                 <option key={entry} value={entry}>
                   {frequencies[entry]}
@@ -743,7 +836,7 @@ function EventEditor({
               <input
                 type="date"
                 name="until"
-                min={startDate}
+                min={wholeSeries ? undefined : startDate}
                 defaultValue={original?.recurrence?.until ?? ""}
                 className={field}
               />

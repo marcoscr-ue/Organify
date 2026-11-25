@@ -16,9 +16,10 @@ import {
   eventExceptionPrefix,
   eventSegmentsField,
   planEventFuture,
+  planEventSeries,
   readEventGroup,
 } from "../src/event-journal";
-import type { EventFutureChanges } from "../src";
+import type { EventFutureChanges, EventSeriesChanges } from "../src";
 import { materialize, type JournalTables } from "../src/journal";
 
 function device(adapter: MemoryAdapter, queue: Op[]) {
@@ -230,6 +231,23 @@ function seriesChange(
   return { impact: plan.impact, op: { ...change!, hlc } };
 }
 
+function wholeSeriesChange(
+  ops: Op[],
+  changes: EventSeriesChanges | null,
+  hlc: string,
+) {
+  const generation = "series-" + hlc.replace(":", "-");
+  const plan = planEventSeries(groupFrom(ops), eventId, changes, generation);
+  const [change] = fields(
+    generation,
+    eventId,
+    changes
+      ? { [eventSegmentsField]: plan.segments }
+      : { "event:removed": true },
+  );
+  return { ...plan, op: { ...change!, hlc } };
+}
+
 function december(ops: Op[]) {
   return eventOccurrences(
     groupFrom(ops).events,
@@ -407,3 +425,223 @@ it.each([
     ]);
   },
 );
+
+it("renombra todos los tramos conservando los horarios y los campos de cada excepción", () => {
+  const split = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    {
+      timing: session("2026-12-01", "19"),
+    },
+    "schedule",
+    "2:0",
+  );
+  const ops = [
+    ...originalSeries,
+    split.op,
+    ...fields("exception", eventId, {
+      [eventExceptionPrefix + "schedule/2026-12-08T19:00/title"]: "Tutoría",
+    }),
+  ];
+  const renamed = wholeSeriesChange(ops, { title: "Curso" }, "3:0");
+  expect(renamed.impact).toMatchObject({
+    replacesSchedule: false,
+    exceptions: 0,
+    segments: [],
+  });
+  expect(december([...ops, renamed.op])).toEqual([
+    ["2026-11-10T18:00", "2026-12-06T17:00:00.000Z", "Curso"],
+    ["2026-12-01T19:00", "2026-12-01T18:00:00.000Z", "Curso"],
+    ["2026-12-08T19:00", "2026-12-08T18:00:00.000Z", "Tutoría"],
+  ]);
+});
+
+it("confirma las excepciones retiradas y conserva las que generan el mismo inicio previsto", () => {
+  const split = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    {
+      timing: session("2026-12-01", "19"),
+    },
+    "schedule",
+    "2:0",
+  );
+  const ops = [
+    ...originalSeries,
+    split.op,
+    ...fields("exception", eventId, {
+      [eventExceptionPrefix + "schedule/2026-12-15T19:00/cancelled"]: true,
+    }),
+  ];
+  const changed = wholeSeriesChange(
+    ops,
+    { recurrence: { interval: 2 } },
+    "3:0",
+  );
+  expect(changed.impact).toMatchObject({
+    replacesSchedule: true,
+    exceptions: 2,
+    segments: [{ from: "2026-11-03T18:00" }, { from: "2026-12-01T19:00" }],
+  });
+  const revised = [...ops, changed.op];
+  expect(groupFrom(revised).events).toMatchObject([
+    { exceptions: { "2026-11-17T18:00": { timing: session("2026-11-20") } } },
+    { exceptions: { "2026-12-15T19:00": { cancelled: true } } },
+  ]);
+  expect(Object.keys(groupFrom(revised).events[0]!.exceptions!)).toEqual([
+    "2026-11-17T18:00",
+  ]);
+  const changedAgain = wholeSeriesChange(
+    revised,
+    { recurrence: { interval: 1 } },
+    "4:0",
+  );
+  expect(
+    Object.keys(
+      groupFrom([...revised, changedAgain.op]).events[0]!.exceptions!,
+    ),
+  ).toEqual(["2026-11-17T18:00"]);
+});
+
+it("reinicia la cadencia en el primer evento de cada tramo al cambiar la frecuencia o el intervalo", () => {
+  const split = seriesChange(
+    originalSeries,
+    "2026-11-10T18:00",
+    { title: "Tramo renombrado" },
+    "rename",
+    "2:0",
+  );
+  const revised = [...originalSeries, split.op];
+  const changed = wholeSeriesChange(
+    revised,
+    { recurrence: { interval: 2 } },
+    "3:0",
+  );
+  const [, successor] = groupFrom([...revised, changed.op]).events;
+  expect(successor?.timing.start).toBe("2026-11-10T18:00");
+  expect(successor?.exceptions).toEqual({
+    "2026-11-10T18:00": { timing: session("2026-12-06") },
+    "2026-11-24T18:00": { cancelled: true },
+  });
+});
+
+it("aplica un cambio global de fecha y conserva los horarios y las reglas propias de cada tramo", () => {
+  const split = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    {
+      timing: session("2026-12-01", "19"),
+      recurrence: { frequency: "daily", interval: 2, until: "2026-12-31" },
+    },
+    "schedule",
+    "2:0",
+  );
+  const ops = [...originalSeries, split.op];
+  const shifted = wholeSeriesChange(ops, { timing: { dayShift: 1 } }, "3:0");
+  expect(groupFrom([...ops, shifted.op]).events).toMatchObject([
+    {
+      timing: session("2026-11-04"),
+      before: "2026-12-02",
+      recurrence: { frequency: "weekly", interval: 1 },
+    },
+    {
+      timing: session("2026-12-02", "19"),
+      recurrence: { frequency: "daily", interval: 2, until: "2027-01-01" },
+    },
+  ]);
+  expect(shifted.impact).toMatchObject({ exceptions: 3 });
+});
+
+it("reasigna una excepción al tramo que ahora genera su inicio y aplica el fin a toda la serie", () => {
+  const split = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    { recurrence: null },
+    "single",
+    "2:0",
+  );
+  const recurringSplit = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    { recurrence: { frequency: "daily", interval: 1, until: null } },
+    "daily",
+    "2:0",
+  );
+  const ops = [
+    ...originalSeries,
+    recurringSplit.op,
+    ...fields("exception", eventId, {
+      [eventExceptionPrefix + "daily/2026-12-01T18:00/title"]:
+        "Inicio del segundo tramo",
+    }),
+  ];
+  const shifted = wholeSeriesChange(ops, { timing: { dayShift: 7 } }, "3:0");
+  const [first, second] = groupFrom([...ops, shifted.op]).events;
+  expect(first?.exceptions?.["2026-12-01T18:00"]).toEqual({
+    title: "Inicio del segundo tramo",
+  });
+  expect(second?.exceptions?.["2026-12-01T18:00"]).toBeUndefined();
+  const limited = wholeSeriesChange(
+    [...originalSeries, split.op],
+    { recurrence: { until: "2026-11-24" } },
+    "3:0",
+  );
+  expect(limited.segments).toHaveLength(1);
+  expect(limited.impact.segments.map(({ from }) => from)).toEqual([
+    "2026-11-03T18:00",
+    "2026-12-01T18:00",
+  ]);
+});
+
+it("sincroniza excepciones heredadas y borra todo el grupo aunque lleguen cambios posteriores", async () => {
+  const changed = wholeSeriesChange(
+    originalSeries,
+    { recurrence: { interval: 2 } },
+    "3:0",
+  );
+  const exception = fields("old", eventId, {
+    [eventExceptionPrefix + "2026-11-17T18:00/notes"]:
+      "Edición con la versión anterior",
+  });
+  const newer = fields("new", eventId, {
+    [eventExceptionPrefix + "series-3-0-0/2026-11-17T18:00/title"]:
+      "Clase especial",
+  });
+  const revised = [...originalSeries, changed.op, ...exception, ...newer];
+  const removed = wholeSeriesChange(revised, null, "4:0");
+  const lateEdit = wholeSeriesChange(
+    revised,
+    { title: "Edición offline" },
+    "5:0",
+  );
+  expect(removed.impact.exceptions).toBe(1);
+  const adapter = new MemoryAdapter();
+  const a = device(adapter, [...revised, lateEdit.op]);
+  const b = device(adapter, [removed.op]);
+  await b.engine.sync();
+  await a.engine.sync();
+  await b.engine.sync();
+  for (const client of [a, b]) {
+    expect(client.replicas.get(eventKey)?.fields[eventSegmentsField]).toEqual(
+      lateEdit.op,
+    );
+    expect(
+      readEventGroup(eventKey, client.replicas.get(eventKey)!),
+    ).toBeUndefined();
+  }
+  expect(groupFrom(revised).events[0]?.exceptions).toEqual({
+    "2026-11-17T18:00": {
+      title: "Clase especial",
+      notes: "Edición con la versión anterior",
+      timing: session("2026-11-20"),
+    },
+  });
+  expect(
+    eventOccurrences(
+      groupFrom(revised).events,
+      new Date("2026-11-20"),
+      new Date("2026-11-21"),
+      "Europe/Madrid",
+    ),
+  ).toMatchObject([{ originalStart: "2026-11-17T18:00" }]);
+});
