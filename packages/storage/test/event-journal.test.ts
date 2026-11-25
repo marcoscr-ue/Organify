@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import {
+  eventOccurrenceForReminder,
   eventOccurrences,
   mergeOp,
   type EventTiming,
@@ -644,4 +645,45 @@ it("sincroniza excepciones heredadas y borra todo el grupo aunque lleguen cambio
       "Europe/Madrid",
     ),
   ).toMatchObject([{ originalStart: "2026-11-17T18:00" }]);
+});
+
+it("sincroniza el recordatorio de la serie, respeta una exclusión puntual y conserva el ajuste al dividir", async () => {
+  const ops = [
+    ...originalSeries,
+    ...fields("reminder", eventId, {
+      "event:reminderMinutes": 15,
+      [eventExceptionPrefix + "2026-11-17T18:00/reminderMinutes"]: null,
+    }),
+  ];
+  const split = seriesChange(
+    ops,
+    "2026-12-01T18:00",
+    { timing: session("2026-12-01", "19") },
+    "split",
+    "2:0",
+  );
+  const whole = wholeSeriesChange(
+    [...ops, split.op],
+    { reminderMinutes: 60 },
+    "3:0",
+  );
+  const adapter = new MemoryAdapter();
+  const a = device(adapter, [...ops, split.op, whole.op]);
+  const b = device(adapter, []);
+  await a.engine.sync();
+  await b.engine.sync();
+  const events = readEventGroup(eventKey, b.replicas.get(eventKey)!)!.events;
+  expect(events.map((event) => event.reminderMinutes)).toEqual([60, 60]);
+  expect(
+    groupFrom([...ops, split.op]).events.map((event) => event.reminderMinutes),
+  ).toEqual([15, 15]);
+  expect(
+    eventOccurrenceForReminder(events, `${eventId}/2026-11-17T18:00`),
+  ).toMatchObject({
+    event: { reminderMinutes: null },
+    start: "2026-11-20T17:00:00.000Z",
+  });
+  expect(
+    eventOccurrenceForReminder(events, `${eventId}/2026-11-24T18:00`),
+  ).toBeUndefined();
 });
