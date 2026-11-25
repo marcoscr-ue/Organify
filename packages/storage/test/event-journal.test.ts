@@ -52,7 +52,16 @@ function device(adapter: MemoryAdapter, queue: Op[]) {
       cursor = next;
     },
   };
-  return { engine: new SyncEngine(store, adapter, codec), replicas, tasks };
+  return {
+    engine: new SyncEngine(store, adapter, codec),
+    replicas,
+    tasks,
+    saveOffline(op: Op) {
+      const key = `${op.entity}:${op.entityId}`;
+      replicas.set(key, mergeOp(replicas.get(key) ?? { fields: {} }, op));
+      queue.push(op);
+    },
+  };
 }
 
 const eventKey = "item:event/1";
@@ -341,12 +350,23 @@ it("renombra los tramos siguientes con sus horarios, cancelaciones y campos de e
   ]);
 });
 
-it.each(["a", "b"])(
-  "converge con divisiones offline incompatibles si %s se reconecta primero",
-  async (first) => {
+it.each([
+  { first: "a", clockA: "2:0", clockB: "3:0", winner: "b" },
+  { first: "b", clockA: "2:0", clockB: "3:0", winner: "b" },
+  { first: "a", clockA: "3:0", clockB: "2:0", winner: "a" },
+  { first: "b", clockA: "3:0", clockB: "2:0", winner: "a" },
+  { first: "b", clockA: "2:0", clockB: "2:0", winner: "b" },
+])(
+  "converge en $winner con HLC $clockA y $clockB si $first se reconecta primero",
+  async ({ first, clockA, clockB, winner }) => {
     const adapter = new MemoryAdapter();
     const origin = device(adapter, originalSeries);
     await origin.engine.sync();
+    const a = device(adapter, []);
+    const b = device(adapter, []);
+    await a.engine.sync();
+    await b.engine.sync();
+    adapter.online = false;
     const left = seriesChange(
       originalSeries,
       "2026-11-10T18:00",
@@ -354,7 +374,7 @@ it.each(["a", "b"])(
         timing: session("2026-11-10", "16"),
       },
       "a",
-      "2:0",
+      clockA,
     );
     const right = seriesChange(
       originalSeries,
@@ -363,24 +383,27 @@ it.each(["a", "b"])(
         timing: session("2026-11-17", "19"),
       },
       "b",
-      "2:0",
+      clockB,
     );
-    const a = device(adapter, [left.op]);
-    const b = device(adapter, [right.op]);
-    adapter.online = false;
+    a.saveOffline(left.op);
+    b.saveOffline(right.op);
     await expect(a.engine.sync()).rejects.toThrow();
     await expect(b.engine.sync()).rejects.toThrow();
     adapter.online = true;
     const order = first === "a" ? [a, b] : [b, a];
     for (const client of [...order, ...order]) await client.engine.sync();
-    const winner = readEventGroup(eventKey, b.replicas.get(eventKey)!);
-    expect(readEventGroup(eventKey, a.replicas.get(eventKey)!)).toEqual(winner);
+    const result = readEventGroup(eventKey, b.replicas.get(eventKey)!);
+    expect(readEventGroup(eventKey, a.replicas.get(eventKey)!)).toEqual(result);
     expect(groupFrom([right.op, left.op, ...originalSeries, right.op])).toEqual(
-      winner,
+      result,
     );
-    expect(winner?.events).toMatchObject([
-      { id: eventId, before: "2026-11-17T18:00" },
-      { id: eventId + "/b", timing: session("2026-11-17", "19") },
+    const cut = winner === "a" ? "2026-11-10" : "2026-11-17";
+    expect(result?.events).toMatchObject([
+      { id: eventId, before: cut + "T18:00" },
+      {
+        id: eventId + "/" + winner,
+        timing: session(cut, winner === "a" ? "16" : "19"),
+      },
     ]);
   },
 );

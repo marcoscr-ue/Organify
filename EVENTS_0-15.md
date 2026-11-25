@@ -162,7 +162,7 @@ El corte usa el inicio previsto en la zona de la serie. Si se cambia la programa
 **Criterios de aceptación**
 
 - Dividir o cortar desde una cita desplazada y comprobar que se usa su fecha original. Verificar que las excepciones anteriores sobreviven y que las afectadas coinciden con la confirmación mostrada.
-- Dividir offline desde dos dispositivos con cambios incompatibles, reconectar en ambos órdenes y comprobar que el historial converge sin tramos activos solapados.
+- Partir de la misma serie sincronizada en dos dispositivos, desconectarlos y hacer dos divisiones incompatibles. Reconectar primero el dispositivo con el cambio más reciente y esperar a que ambos hayan descargado los dos cambios. Repetir con una serie de prueba nueva e invertir el orden de reconexión. El cambio con mayor HLC debe prevalecer en ambos casos y el historial debe converger sin tramos activos solapados.
 
 ### 0.15.3 — Operaciones sobre toda la serie
 
