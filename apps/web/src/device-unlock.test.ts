@@ -79,7 +79,7 @@ it("reanuda con la sesión y la envoltura correctas y rechaza una envoltura sust
       cursor: async () => "0",
       apply: async () => undefined,
     };
-    const engine = await resumeSync(api, store, saved);
+    const { engine } = await resumeSync(api, store, saved);
     await expect(engine.sync()).resolves.toBeUndefined();
     expect(store.bind).toHaveBeenCalledExactlyOnceWith(context.userId);
 

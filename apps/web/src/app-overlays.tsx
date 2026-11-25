@@ -20,6 +20,7 @@ import { InterfaceIcon } from "./interface-icon";
 import { PwaSettings } from "./pwa-settings";
 import { ShortcutSettings } from "./shortcut-settings";
 import { SyncSettings, type SyncStatus } from "./sync-settings";
+import type { WorkspaceSession } from "./workspace-connection";
 import type { WorkspacePreferences } from "./workspace-shortcuts";
 import {
   fontSizes,
@@ -66,6 +67,18 @@ type Release = {
 };
 
 const releases: Release[] = [
+  {
+    version: "0.16.0",
+    date: "2026-11-25",
+    changes: [
+      introduced(
+        "Crea espacios de trabajo compartidos e invita a otra cuenta para colaborar en proyectos y tareas con sincronización cifrada.",
+      ),
+      updated(
+        "Tus proyectos, tareas, rutinas y eventos actuales están en el espacio Personal.",
+      ),
+    ],
+  },
   {
     version: "0.15.4",
     date: "2026-11-25",
@@ -915,12 +928,14 @@ function SyncBadge({ status }: { status: SyncStatus }) {
 
 export function AppControls({
   store,
+  onWorkspaceSession,
   darkMode,
   onThemeChange,
   preferences,
   viewPreferences,
 }: {
   store: TaskRepositories["sync"];
+  onWorkspaceSession: (session?: WorkspaceSession) => void;
   darkMode: boolean;
   onThemeChange: (dark: boolean) => void;
   preferences: WorkspacePreferences;
@@ -1132,7 +1147,12 @@ export function AppControls({
           </span>
         }
       >
-        <SyncSettings store={store} status={status} onStatus={setStatus} />
+        <SyncSettings
+          store={store}
+          status={status}
+          onStatus={setStatus}
+          onWorkspaceSession={onWorkspaceSession}
+        />
       </AppDialog>
     </>
   );

@@ -296,6 +296,20 @@ En **Ajustes → General**, selecciona otra **Vista predeterminada** y vuelve a 
 - Con la misma cuenta en dos dispositivos, sincroniza la rutina, desconecta ambos y marca un paso distinto en cada uno. Al reconectar, deben verse ambos pasos y una sola finalización del ciclo.
 - Sincroniza una cuenta de prueba que tenga rutinas con un cliente 0.9.0 y crea una tarea en ese cliente. Comprueba que la tarea llega a la 0.10.0. Actualiza el cliente 0.9.0 y comprueba que aparecen las rutinas y sus marcas.
 
+## Espacios compartidos
+
+Aplica `supabase/migrations/202611250001_shared_workspaces.sql` desde **SQL Editor** tras las migraciones anteriores. Usa un proyecto de Supabase de pruebas y dos cuentas con el correo confirmado para probar la colaboración.
+
+1. Desde **Cuenta**, conecta ambas cuentas al mismo proyecto y desbloquea el cifrado en dos perfiles de navegador distintos.
+2. En el primer perfil, abre **Espacios compartidos → Crear espacio**. Crea un proyecto y una tarea con descripción dentro del espacio nuevo. Abre de nuevo **Espacios compartidos → Gestionar acceso** y genera una invitación para el correo de la segunda cuenta.
+3. Comparte el código por un canal privado y pégalo en **Espacios compartidos → Aceptar invitación** desde la segunda cuenta. Comprueba que aparecen el proyecto, la tarea y la descripción. El código está ligado al correo, dura 48 horas y se consume al aceptarlo. Generar otro código para el mismo correo invalida el anterior.
+4. Con los dos perfiles abiertos en el espacio compartido, desconecta ambos, cambia el título en uno y el estado en el otro. Al reconectar, comprueba que ambos cambios llegan y que **Personal** conserva sus propios proyectos y tareas. Prueba también la sincronización de **Personal** entre clientes 0.15.x y 0.16.0.
+5. Retira el acceso de la segunda cuenta desde **Gestionar acceso**. Comprueba que el espacio deja de aparecer en esa cuenta cuando vuelve a contactar con el servidor. Si la vuelves a invitar, comprueba que los cambios pendientes de su alta anterior no se reenvían.
+
+Los espacios compartidos de esta versión incluyen proyectos, tareas y descripciones en bloques. Las rutinas, los eventos, los recordatorios y las ventanas independientes se usan desde **Personal**. Para recuperar los espacios compartidos después de recargar, inicia sesión y desbloquea el cifrado con conexión. Una vez abierto el espacio, puedes seguir editándolo sin conexión.
+
+Supabase guarda el correo de invitación, la pertenencia al espacio y los registros cifrados. El nombre, el contenido y la clave del espacio se cifran en cliente. La parte del código que abre la clave se comparte directamente con la persona invitada. Al retirar un miembro, Supabase corta su acceso al historial y a las nuevas escrituras. El dispositivo del miembro puede conservar los datos ya descargados y esta versión mantiene la misma clave de espacio.
+
 ## Fase 5 · Descripción en bloques
 
 Después de actualizar `dev`, ejecuta `corepack pnpm install` y guarda el

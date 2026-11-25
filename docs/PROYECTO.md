@@ -10,7 +10,7 @@ App personal para organizar tareas que mezcla:
 - **Notas tipo Notion** (cuerpo en bloques dentro de cada tarea).
 
 Plataformas: **PC y móvil** como prioridad, **web** como puerta abierta (y de hecho es la base de todo).
-Uso: personal ahora; **diseñar para colaboración futura** sin implementarla todavía.
+Uso personal y colaboración en proyectos y tareas desde la v0.16.
 Requisitos duros: **offline-first**, **sincronización entre dispositivos**, **cifrado de extremo a extremo (E2EE)**.
 
 Perfil del desarrollador: conocimientos amplios de programación e informática. Se trabaja "vibecoding" con IA: pasos pequeños, verificables, con tests.
@@ -122,7 +122,7 @@ interface Op {
 - **Borrados**: op `delete` que pone `deletedAt`; gana si su HLC es mayor que el de cualquier edición posterior (decisión documentada en tests).
 
 ### 5.3 Servidor "tonto"
-Tabla única en Postgres:
+El historial personal usa la tabla `changes` en Postgres:
 
 ```sql
 create table changes (
@@ -144,6 +144,8 @@ alter table changes enable row level security;
 - Metadatos que el servidor sí ve: tamaño, momento y dispositivo de cada cambio. Se asume.
 - Con los avisos push activados en un dispositivo, el servidor también ve su suscripción push y la hora de cada recordatorio, con un identificador aleatorio sin relación con la tarea. Es opcional y se asume.
 
+Los espacios compartidos tienen sus propios registros de cambios. Supabase autoriza la subida y la descarga según la pertenencia al espacio. En el dispositivo, cada alta en un espacio usa una base local con su propio cursor y su propia cola de cambios.
+
 ### 5.4 Estados a manejar
 Offline prolongado, reintentos con backoff, ops duplicadas (idempotencia), orden de llegada distinto, dispositivo nuevo (descarga completa + descifrado), y reinstalación.
 
@@ -161,10 +163,11 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 - **Clave maestra** aleatoria de 256 bits, generada en el primer dispositivo.
 - La clave maestra se **envuelve** (cifra) con una clave derivada de la **contraseña/passphrase** del usuario mediante **Argon2id**; la versión envuelta puede guardarse en el servidor.
 - **Clave de recuperación** (frase larga o QR) generada al registrarse, para poder recuperar la maestra si se olvida la passphrase. **Si se pierden ambas, los datos son irrecuperables.** Esto debe explicarse en la UI.
-- Cifrado de ops: **XChaCha20-Poly1305** con nonce aleatorio; incluir `userId` y `opId` como *associated data*.
+- Cifrado de ops: **XChaCha20-Poly1305** con nonce aleatorio. Los datos asociados incluyen la cuenta o el espacio compartido, la operación y el dispositivo.
 - Auth de Supabase (email/contraseña o magic link) separada de la clave de cifrado: **la contraseña de login no debe ser la misma que deriva la clave**, o se deriva de forma independiente.
 - Búsqueda y filtros **solo en cliente** (el servidor no ve nada).
-- **Colaboración futura**: una clave por workspace/proyecto compartido, distribuida a cada miembro cifrada con su clave pública (**X25519 sealed boxes**). Diseñar el campo `workspaceId` desde el principio aunque ahora solo exista uno por usuario.
+- **Colaboración**. Cada espacio compartido tiene una clave aleatoria. Un código de un solo uso contiene el secreto que permite al invitado abrir esa clave. El servidor verifica una prueba derivada del código y el correo de la cuenta. Al aceptar, el invitado protege su copia de la clave con su clave de cuenta, lo que permite recuperarla en otros dispositivos.
+- **Jerarquía**. Los proyectos pertenecen a un espacio y las tareas pueden vincularse a un proyecto del mismo espacio. El espacio **Personal** incluye también las rutinas y los eventos. En un espacio compartido, el propietario gestiona el acceso y los miembros ven y editan los proyectos y tareas del espacio.
 - Usa libsodium para las operaciones sincronizadas y las envolturas de cuenta. El desbloqueo recordado usa una clave no exportable de Web Crypto para proteger una copia local de la clave maestra.
 
 ## 7. UX / Diseño
@@ -217,7 +220,7 @@ A escala personal el log es pequeño (del orden de miles de ops al año), así q
 
 **Fase 5 – Notion-like**: editor de bloques completo (TipTap + Yjs cifrado), propiedades personalizadas, vistas guardadas.
 
-**Fase 6 – Colaboración (opcional)**: workspaces compartidos, claves por workspace, invitaciones.
+**Fase 6 – Colaboración**. Espacios compartidos, claves por espacio e invitaciones en la v0.16.
 
 ## 10. Reglas de trabajo para la IA
 
