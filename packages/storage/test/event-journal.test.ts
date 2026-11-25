@@ -211,6 +211,36 @@ function groupFrom(ops: Op[]) {
   )!;
 }
 
+it("conserva el proyecto de toda la serie al aplicar un corte de un cliente anterior", () => {
+  const [link] = fields("new", eventId, { "event:projectId": "project/1" });
+  const [unlink] = fields("newer", eventId, { "event:projectId": null });
+  const cut = seriesChange(
+    originalSeries,
+    "2026-12-01T18:00",
+    { title: "Clase de diciembre" },
+    "legacy",
+    "2:0",
+  );
+  const ops = [...originalSeries, { ...link!, hlc: "3:0" }, cut.op];
+  const linked = groupFrom(ops);
+  expect(linked.events.map(({ projectId }) => projectId)).toEqual([
+    "project/1",
+    "project/1",
+  ]);
+  expect(linked.segments.every((segment) => !("projectId" in segment))).toBe(
+    true,
+  );
+  expect(linked.events[0]?.exceptions?.["2026-11-10T18:00"]?.timing).toEqual(
+    session("2026-12-06"),
+  );
+  const unlinked = groupFrom([{ ...unlink!, hlc: "4:0" }, ...ops]);
+  expect(unlinked.events.map(({ projectId }) => projectId)).toEqual([
+    undefined,
+    undefined,
+  ]);
+  expect(unlinked.segments).toEqual(linked.segments);
+});
+
 function seriesChange(
   ops: Op[],
   cut: string,

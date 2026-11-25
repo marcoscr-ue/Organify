@@ -26,7 +26,7 @@ export const eventKeyPrefix = "item:" + eventIdPrefix;
 export const eventExceptionPrefix = "event:occurrence/";
 export const eventSegmentsField = "event:segments";
 
-type EventSegment = Pick<EventInput, keyof EventInput> & {
+type EventSegment = Omit<EventInput, "projectId"> & {
   id: string;
   // Metadata splits share the same exceptions. A new schedule gets a new source.
   source: string;
@@ -191,6 +191,7 @@ export function readEventGroup(key: string, state: Replica) {
   const revision = state.fields[eventSegmentsField];
   const value = revision?.value;
   const { groupId, ...input } = root;
+  const projectId = state.fields["event:projectId"]?.value;
   // A single LWW field chooses the complete active timeline, even when
   // competing cuts and their exception operations arrive in different batches.
   const segments: EventSegment[] =
@@ -223,6 +224,7 @@ export function readEventGroup(key: string, state: Replica) {
       }
       return {
         ...event,
+        ...(typeof projectId === "string" && { projectId }),
         ...(event.recurrence && {
           exceptions: Object.fromEntries(
             [...active].flatMap(([start, fields]) => {

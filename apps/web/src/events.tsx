@@ -12,6 +12,7 @@ import {
   type EventOccurrence,
   type EventRecurrence,
   type EventTiming,
+  type Project,
 } from "@organify/core";
 import type {
   EventFutureChanges,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { CloseDialogButton } from "./app-overlays";
 import { localStamp } from "./calendar-schedule";
 import { InterfaceIcon } from "./interface-icon";
+import { ProjectSelect } from "./task-controls";
 import {
   reminderPermission,
   reminderPermissionEvent,
@@ -276,15 +278,24 @@ export function EventsAgenda({
 export function EventDialog({
   action,
   store,
+  projects,
+  projectId,
+  reminders,
   close,
 }: {
   action: EventDialogAction;
   store: TaskRepositories["events"];
+  projects: Project[];
+  projectId?: string;
+  reminders: boolean;
   close: () => void;
 }) {
   const occurrence = "event" in action ? action : undefined;
   const date = "date" in action ? action.date : undefined;
   const original = occurrence?.event;
+  const projectName = projects.find(
+    ({ id }) => id === original?.projectId,
+  )?.name;
   const recurring = Boolean(original?.recurrence);
   const [scope, setScope] = useState<EventScope>("single");
   const [mode, setMode] = useState<
@@ -412,15 +423,20 @@ export function EventDialog({
   function save(input: EventInput) {
     if (!editorEvent) return write(() => store.create(input));
     const { title, notes, color, timing, reminderMinutes } = input;
+    const projectChange =
+      input.projectId !== undefined &&
+      input.projectId !== (editorEvent.projectId ?? null)
+        ? { projectId: input.projectId }
+        : {};
     const previousTiming = editorEvent.timing;
     const changes = {
       ...(title !== editorEvent.title && { title }),
       ...(notes !== editorEvent.notes && { notes }),
       ...(color !== editorEvent.color && { color }),
-      ...((reminderMinutes ?? null) !==
-        (editorEvent.reminderMinutes ?? null) && {
-        reminderMinutes: reminderMinutes ?? null,
-      }),
+      ...(reminders &&
+        (reminderMinutes ?? null) !== (editorEvent.reminderMinutes ?? null) && {
+          reminderMinutes: reminderMinutes ?? null,
+        }),
       ...((timing.start !== previousTiming.start ||
         timing.end !== previousTiming.end ||
         timing.allDay !== previousTiming.allDay ||
@@ -436,7 +452,10 @@ export function EventDialog({
         return Promise.resolve();
       }
       const { timing: changedTiming, ...metadata } = changes;
-      const series: EventSeriesChanges = metadata;
+      const series: EventSeriesChanges = {
+        ...metadata,
+        ...projectChange,
+      };
       const { frequency, interval, until } = input.recurrence;
       const previous = editorEvent.recurrence;
       const recurrence = {
@@ -470,7 +489,7 @@ export function EventDialog({
             occurrence.originalStart,
             changes,
           )
-        : store.update(editorEvent.id, changes),
+        : store.update(editorEvent.id, { ...changes, ...projectChange }),
     );
   }
 
@@ -544,6 +563,10 @@ export function EventDialog({
             <EventEditor
               original={editorEvent && { ...editorEvent, ...draft }}
               date={date}
+              projects={projects}
+              projectId={projectId}
+              editProject={!recurring || scope === "series"}
+              reminders={reminders}
               editRecurrence={!editorEvent || scope !== "single"}
               wholeSeries={scope === "series"}
               busy={busy}
@@ -654,12 +677,15 @@ export function EventDialog({
                 ].toLocaleLowerCase("es")}
               </p>
             )}
+            {projectName && (
+              <p className="text-sm text-muted">Proyecto · {projectName}</p>
+            )}
             {occurrence.event.notes && (
               <p className="wrap-anywhere whitespace-pre-wrap">
                 {occurrence.event.notes}
               </p>
             )}
-            {occurrence.event.reminderMinutes != null && (
+            {reminders && occurrence.event.reminderMinutes != null && (
               <>
                 <p className="text-sm text-muted">
                   {occurrence.event.timing.allDay
@@ -736,6 +762,10 @@ export function EventDialog({
 function EventEditor({
   original,
   date,
+  projects,
+  projectId,
+  editProject,
+  reminders,
   editRecurrence,
   wholeSeries,
   busy,
@@ -743,6 +773,10 @@ function EventEditor({
 }: {
   original?: CalendarEvent;
   date?: string;
+  projects: Project[];
+  projectId?: string;
+  editProject: boolean;
+  reminders: boolean;
   editRecurrence: boolean;
   wholeSeries: boolean;
   busy: boolean;
@@ -753,6 +787,9 @@ function EventEditor({
     editRecurrence ? (original?.recurrence?.frequency ?? "") : "",
   );
   const [useColor, setUseColor] = useState(Boolean(original?.color));
+  const [project, setProject] = useState(
+    (original ? original.projectId : projectId) ?? "",
+  );
   const [reminder, setReminder] = useState(original?.reminderMinutes ?? null);
   const [defaults] = useState(() => {
     const day = date ?? localStamp(new Date()).slice(0, 10);
@@ -785,7 +822,8 @@ function EventEditor({
           title: text("title").trim(),
           notes: text("notes").trim(),
           color: useColor ? text("color") : null,
-          reminderMinutes: reminder,
+          ...(editProject && { projectId: project || null }),
+          ...(reminders && { reminderMinutes: reminder }),
           timing: allDay
             ? {
                 allDay: true,
@@ -819,6 +857,18 @@ function EventEditor({
             className={field}
           />
         </label>
+        {editProject && (
+          <label className="grid gap-1">
+            {original?.groupId || frequency
+              ? "Proyecto de la serie"
+              : "Proyecto"}
+            <ProjectSelect
+              value={project}
+              projects={projects}
+              onChange={setProject}
+            />
+          </label>
+        )}
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -940,37 +990,39 @@ function EventEditor({
             Se omitirán los meses que no tengan ese día.
           </p>
         )}
-        <label className="grid gap-1">
-          Recordatorio
-          <select
-            className={field}
-            value={reminder ?? ""}
-            onChange={(event) =>
-              setReminder(
-                event.target.value === "" ? null : Number(event.target.value),
-              )
-            }
-          >
-            <option value="">Sin recordatorio</option>
-            {reminderOptions.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {allDay && minutes === 0
-                  ? "A las 09:00"
-                  : reminderLabel(minutes)}
-              </option>
-            ))}
-            {reminder !== null && !reminderOptions.includes(reminder) && (
-              <option value={reminder}>{reminderLabel(reminder)}</option>
-            )}
-          </select>
-        </label>
-        {allDay && reminder !== null && (
+        {reminders && (
+          <label className="grid gap-1">
+            Recordatorio
+            <select
+              className={field}
+              value={reminder ?? ""}
+              onChange={(event) =>
+                setReminder(
+                  event.target.value === "" ? null : Number(event.target.value),
+                )
+              }
+            >
+              <option value="">Sin recordatorio</option>
+              {reminderOptions.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {allDay && minutes === 0
+                    ? "A las 09:00"
+                    : reminderLabel(minutes)}
+                </option>
+              ))}
+              {reminder !== null && !reminderOptions.includes(reminder) && (
+                <option value={reminder}>{reminderLabel(reminder)}</option>
+              )}
+            </select>
+          </label>
+        )}
+        {reminders && allDay && reminder !== null && (
           <p className="text-muted">
             El aviso se calcula a partir de las 09:00 del primer día, en la zona
             de este dispositivo.
           </p>
         )}
-        {reminder !== null && <EventReminderPermission />}
+        {reminders && reminder !== null && <EventReminderPermission />}
         <label className="grid gap-1">
           Notas (opcional)
           <textarea
