@@ -13,6 +13,7 @@ import type {
   RoutineInput,
   CalendarEvent,
   EventInput,
+  EventChanges,
 } from "@organify/core";
 
 export interface TaskSnapshot {
@@ -40,6 +41,12 @@ export interface TaskRepositories {
       changes: Partial<Omit<EventInput, "recurrence">>,
     ): Promise<void>;
     remove(id: Id): Promise<void>;
+    updateOccurrence(
+      id: Id,
+      originalStart: string,
+      changes: EventChanges,
+    ): Promise<void>;
+    cancelOccurrence(id: Id, originalStart: string): Promise<void>;
   };
   routines: {
     create(input: RoutineInput): Promise<Id>;

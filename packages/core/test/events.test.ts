@@ -151,3 +151,55 @@ it("mantiene la cadencia al consultar lejos del origen y valida los límites", (
     ),
   ).toEqual(["2026-05-31T18:00", "2026-07-31T18:00"]);
 });
+
+it("muestra una ocurrencia desplazada solo en el destino y conserva su clave", () => {
+  const event = series({
+    exceptions: {
+      "2026-01-31T18:00": {
+        title: "Clase especial",
+        timing: { allDay: true, start: "2026-04-03", end: "2026-04-05" },
+      },
+      "2026-03-31T18:00": { cancelled: true },
+    },
+  });
+  expect(between(event, "2026-01-01", "2026-04-01")).toEqual([]);
+  expect(between(event, "2026-04-04", "2026-04-05")).toMatchObject([
+    {
+      id: "event/1/2026-01-31T18:00",
+      start: "2026-04-03",
+      end: "2026-04-05",
+      event: { title: "Clase especial" },
+    },
+  ]);
+  expect(between(event, "2026-05-01", "2026-06-01")).toMatchObject([
+    { originalStart: "2026-05-31T18:00", event: { title: "Clase" } },
+  ]);
+});
+
+it("aplica cambios parciales sobre la serie y oculta una ocurrencia movida al cancelarla", () => {
+  const event = series({
+    notes: "Notas de la serie",
+    exceptions: {
+      "2026-01-31T18:00": { title: "Clase especial", color: null },
+      "2026-03-31T18:00": {
+        timing: {
+          allDay: false,
+          start: "2026-06-01T18:00",
+          end: "2026-06-01T19:00",
+          timeZone: "Europe/Madrid",
+        },
+        cancelled: true,
+      },
+      "2026-02-28T18:00": {
+        timing: { allDay: true, start: "2026-06-01", end: "2026-06-02" },
+      },
+    },
+  });
+  expect(between(event, "2026-01-01", "2026-02-01")).toMatchObject([
+    {
+      start: "2026-01-31T17:00:00.000Z",
+      event: { title: "Clase especial", notes: "Notas de la serie" },
+    },
+  ]);
+  expect(between(event, "2026-06-01", "2026-07-01")).toEqual([]);
+});

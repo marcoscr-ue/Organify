@@ -6,6 +6,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.15.1 guarda los cambios puntuales de una serie en campos `event:occurrence/<inicio-original>/<campo>` de la réplica del tramo. El horario se sincroniza como un campo y una cancelación prevalece sobre las ediciones de esa ocurrencia. Se mantienen el protocolo 1, IndexedDB y las RPC de Supabase. La 0.15.0 sigue mostrando la serie según su regla original, conserva los campos nuevos y aplica las excepciones al actualizar. La 0.14 los conserva en el diario junto con los demás datos de eventos. El APK de distribución usa `versionName` 0.15.1 y `versionCode` 15001.
+
 - La 0.15.0 guarda eventos en el diario mediante operaciones de campo `item` del protocolo 1, con identificadores `event/<uuid>` y campos `event:*`. El inicio, el fin, la zona y la repetición se guardan juntos para mantener una programación coherente al sincronizar. Los clientes 0.14 conservan las operaciones en sus réplicas, siguen intercambiando tareas y muestran los eventos guardados cuando se actualizan. El esquema de IndexedDB y las RPC de Supabase se mantienen. Para esta versión, Android usa `versionName` 0.15.0 y `versionCode` 15000 al generar el APK de distribución.
 
 - La 0.14.0 guarda las nuevas preferencias en el dispositivo. Los clientes anteriores y nuevos siguen intercambiando operaciones con el protocolo 1 y las migraciones de Supabase existentes para sincronizar datos.

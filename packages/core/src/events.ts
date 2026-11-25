@@ -30,6 +30,13 @@ export interface EventInput extends EventSchedule {
 export interface CalendarEvent extends EventInput {
   id: string;
   groupId: string | null;
+  exceptions?: Record<string, EventException>;
+}
+
+export type EventChanges = Partial<Omit<EventInput, "recurrence">>;
+
+export interface EventException extends EventChanges {
+  cancelled?: true;
 }
 
 export interface EventOccurrence {
@@ -162,6 +169,70 @@ function* plannedStarts(
   }
 }
 
+export function isEventOccurrenceStart(event: CalendarEvent, value: string) {
+  const { timing, recurrence } = event;
+  if (!recurrence || !(timing.allDay ? dateOnly : dateTime).test(value))
+    return false;
+  if (!isRoutineDate(value.slice(0, 10)) || value < timing.start) return false;
+  const instant = civilTime(value);
+  return (
+    plannedStarts(
+      civilTime(timing.start),
+      instant,
+      instant + 1,
+      recurrence,
+    ).next().value === instant
+  );
+}
+
+function eventDuration(timing: EventTiming) {
+  const start = civilTime(timing.start);
+  const end = civilTime(timing.end);
+  if (!timing.allDay) {
+    const resolved = resolveStart(start, timing.timeZone);
+    if (resolved + offsetAt(resolved, zoneFormat(timing.timeZone)) === start) {
+      const elapsed = resolveStart(end, timing.timeZone) - resolved;
+      if (elapsed > 0) return elapsed;
+    }
+  }
+  return end - start;
+}
+
+export function occurrenceTiming(
+  timing: EventTiming,
+  start: Date,
+  end: Date,
+  allDay: boolean,
+  displayZone: string,
+): EventTiming {
+  if (allDay)
+    return {
+      allDay,
+      start: routineDate(+start, displayZone),
+      end: routineDate(+end, displayZone),
+    };
+  const timeZone = timing.allDay ? displayZone : timing.timeZone;
+  const local = (date: Date) =>
+    new Date(
+      +date + offsetAt(Math.floor(+date / 1000) * 1000, zoneFormat(timeZone)),
+    )
+      .toISOString()
+      .slice(0, 16);
+  const localStart = local(start);
+  const localEnd = local(end);
+  return {
+    allDay,
+    timeZone,
+    start: localStart,
+    end:
+      localEnd > localStart
+        ? localEnd
+        : new Date(civilTime(localStart) + +end - +start)
+            .toISOString()
+            .slice(0, 16),
+  };
+}
+
 export function eventOccurrences(
   events: readonly CalendarEvent[],
   start: Date,
@@ -173,19 +244,35 @@ export function eventOccurrences(
   // A partially visible end date still overlaps an all-day event.
   const lastCivilDate = civilTime(routineDate(+end - 1, displayZone));
   const occurrences: EventOccurrence[] = [];
+  function include(
+    event: CalendarEvent,
+    originalStart: string,
+    planned: number,
+    duration: number,
+  ) {
+    const { timing } = event;
+    const instant = timing.allDay
+      ? planned
+      : resolveStart(planned, timing.timeZone);
+    const from = timing.allDay ? civilStart : +start;
+    const to = timing.allDay ? lastCivilDate + day : +end;
+    if (instant >= to || instant + duration <= from) return;
+    const stamp = (value: number) => {
+      const iso = new Date(value).toISOString();
+      return timing.allDay ? iso.slice(0, 10) : iso;
+    };
+    occurrences.push({
+      id: `${event.id}/${originalStart}`,
+      event,
+      originalStart,
+      start: stamp(instant),
+      end: stamp(instant + duration),
+    });
+  }
   for (const event of events) {
-    const { timing, recurrence } = event;
+    const { timing, recurrence, exceptions } = event;
     const anchor = civilTime(timing.start);
-    const plannedEnd = civilTime(timing.end);
-    let duration = plannedEnd - anchor;
-    if (!timing.allDay) {
-      const resolved = resolveStart(anchor, timing.timeZone);
-      const offset = offsetAt(resolved, zoneFormat(timing.timeZone));
-      if (resolved + offset === anchor) {
-        const elapsed = resolveStart(plannedEnd, timing.timeZone) - resolved;
-        if (elapsed > 0) duration = elapsed;
-      }
-    }
+    const duration = eventDuration(timing);
     const from = timing.allDay ? civilStart : +start;
     const to = timing.allDay ? lastCivilDate + day : +end;
     // Offsets and a clock change can place the instant on another UTC day.
@@ -196,24 +283,31 @@ export function eventOccurrences(
       to + margin,
       recurrence,
     )) {
-      const instant = timing.allDay
-        ? planned
-        : resolveStart(planned, timing.timeZone);
-      if (instant >= to || instant + duration <= from) continue;
-      const stamp = (value: number) => {
-        const iso = new Date(value).toISOString();
-        return timing.allDay ? iso.slice(0, 10) : iso;
-      };
       const originalStart = new Date(planned)
         .toISOString()
         .slice(0, timing.allDay ? 10 : 16);
-      occurrences.push({
-        id: `${event.id}/${originalStart}`,
-        event,
+      const exception = exceptions?.[originalStart];
+      if (exception?.cancelled || exception?.timing) continue;
+      include(
+        exception ? { ...event, ...exception } : event,
         originalStart,
-        start: stamp(instant),
-        end: stamp(instant + duration),
-      });
+        planned,
+        duration,
+      );
+    }
+    for (const [originalStart, exception] of Object.entries(exceptions ?? {})) {
+      if (
+        !exception.cancelled &&
+        exception.timing &&
+        isEventOccurrenceStart(event, originalStart)
+      ) {
+        include(
+          { ...event, ...exception },
+          originalStart,
+          civilTime(exception.timing.start),
+          eventDuration(exception.timing),
+        );
+      }
     }
   }
   return occurrences;
