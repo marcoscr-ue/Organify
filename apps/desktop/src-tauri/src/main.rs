@@ -206,11 +206,16 @@ fn pending_release_notes(app: tauri::AppHandle, dismiss: bool) -> Result<bool, S
 }
 
 #[tauri::command]
-fn show_reminder(app: tauri::AppHandle) -> Result<(), String> {
+fn show_reminder(app: tauri::AppHandle, event: Option<bool>) -> Result<(), String> {
+    let body = if event.unwrap_or(false) {
+        "Tienes un recordatorio de Organify."
+    } else {
+        "Tienes una tarea pendiente."
+    };
     app.notification()
         .builder()
         .title("Organify")
-        .body("Tienes una tarea pendiente.")
+        .body(body)
         .show()
         .map_err(|error| error.to_string())
 }

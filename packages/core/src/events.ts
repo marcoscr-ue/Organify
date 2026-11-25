@@ -3,6 +3,18 @@ import { isRoutineDate, routineDate } from "./routines";
 const day = 86_400_000;
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 const dateTime = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/;
+export const maxEventReminderMinutes = 7 * 24 * 60;
+export const allDayEventReminderTime = "09:00";
+
+export function isEventReminder(value: unknown): value is number | null {
+  return (
+    value === null ||
+    (typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value <= maxEventReminderMinutes)
+  );
+}
 
 export const eventFrequencies = ["daily", "weekly", "monthly"] as const;
 
@@ -25,6 +37,7 @@ export interface EventInput extends EventSchedule {
   title: string;
   notes: string;
   color: string | null;
+  reminderMinutes?: number | null;
 }
 
 export interface CalendarEvent extends EventInput {
@@ -227,6 +240,25 @@ export function firstEventStart({
   return from && from > timing.start ? from : timing.start;
 }
 
+export function eventReminderTime(
+  occurrence: EventOccurrence,
+  displayZone: string,
+) {
+  const minutes = occurrence.event.reminderMinutes;
+  if (!isEventReminder(minutes) || minutes === null) return;
+  const start = occurrence.event.timing.allDay
+    ? resolveStart(
+        civilTime(`${occurrence.start}T${allDayEventReminderTime}`),
+        displayZone,
+      )
+    : Date.parse(occurrence.start);
+  return start - minutes * 60_000;
+}
+
+export function eventReminderId(occurrence: EventOccurrence) {
+  return `${occurrence.segment.groupId ?? occurrence.segment.id}/${occurrence.originalStart}`;
+}
+
 export function occurrenceTiming(
   timing: EventTiming,
   start: Date,
@@ -287,18 +319,9 @@ export function eventOccurrences(
     const from = timing.allDay ? civilStart : +start;
     const to = timing.allDay ? lastCivilDate + day : +end;
     if (instant >= to || instant + duration <= from) return;
-    const stamp = (value: number) => {
-      const iso = new Date(value).toISOString();
-      return timing.allDay ? iso.slice(0, 10) : iso;
-    };
-    occurrences.push({
-      id: `${event.id}/${originalStart}`,
-      event,
-      segment,
-      originalStart,
-      start: stamp(instant),
-      end: stamp(instant + duration),
-    });
+    occurrences.push(
+      makeOccurrence(segment, event, originalStart, instant, duration),
+    );
   }
   for (const event of events) {
     const { timing, recurrence, exceptions } = event;
@@ -347,4 +370,56 @@ export function eventOccurrences(
     }
   }
   return occurrences;
+}
+
+function makeOccurrence(
+  segment: CalendarEvent,
+  event: CalendarEvent,
+  originalStart: string,
+  instant: number,
+  duration: number,
+): EventOccurrence {
+  const stamp = (value: number) => {
+    const iso = new Date(value).toISOString();
+    return event.timing.allDay ? iso.slice(0, 10) : iso;
+  };
+  return {
+    id: `${event.id}/${originalStart}`,
+    event,
+    segment,
+    originalStart,
+    start: stamp(instant),
+    end: stamp(instant + duration),
+  };
+}
+
+export function eventOccurrenceForReminder(
+  events: readonly CalendarEvent[],
+  id: string,
+) {
+  const split = id.lastIndexOf("/");
+  const groupId = id.slice(0, split);
+  const originalStart = id.slice(split + 1);
+  const segment = events.find(
+    (event) =>
+      (event.groupId ?? event.id) === groupId &&
+      (event.recurrence
+        ? isEventOccurrenceStart(event, originalStart)
+        : originalStart === event.timing.start),
+  );
+  if (!segment) return;
+  const exception = segment.exceptions?.[originalStart];
+  if (exception?.cancelled) return;
+  const event = exception ? { ...segment, ...exception } : segment;
+  const { timing } = event;
+  const planned = civilTime(exception?.timing?.start ?? originalStart);
+  return makeOccurrence(
+    segment,
+    event,
+    originalStart,
+    timing.allDay ? planned : resolveStart(planned, timing.timeZone),
+    exception?.timing
+      ? eventDuration(timing)
+      : (segment.duration ?? eventDuration(timing)),
+  );
 }

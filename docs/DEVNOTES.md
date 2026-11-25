@@ -188,6 +188,10 @@ Al desplegar una versión nueva, la PWA abierta muestra **Hay una versión nueva
 
 Abre el editor de una tarea, elige una hora futura en **Recordatorio en este dispositivo** y pulsa **Guardar**. Concede el permiso si se solicita. El aviso usa un texto genérico en la pantalla bloqueada. Para cancelar el aviso, pulsa **Quitar recordatorio** y **Guardar**. En Chrome y Windows deja la app abierta, salvo que actives los avisos push. En Android puede llegar en segundo plano y el ahorro de batería puede retrasarlo. Los recordatorios son puntuales por tarea y dispositivo. Al pulsar el aviso se abre la tarea.
 
+En **Eventos**, crea una cita repetible con un inicio próximo y elige un **Recordatorio**. Usa **Permitir avisos en este dispositivo** si aparece. Desplaza una ocurrencia desde el calendario, cancela otra y corta la serie desde una tercera. Comprueba que se programa el nuevo aviso de la primera y se retiran los demás. Para probar una excepción al recordatorio, edita **Solo este evento** y elige **Sin recordatorio**. Un evento de día completo toma como referencia las 09:00 del primer día en la zona local.
+
+En la PWA con push activo, repite la prueba con la app cerrada después de que se hayan sincronizado los avisos. El texto del aviso es genérico. Al pulsarlo, la PWA abre la ocurrencia si sigue disponible. La ventana de programación de 30 días se renueva con la app en marcha. Si mueves o cancelas el evento desde otro dispositivo, el cambio se aplica cuando sincroniza el dispositivo que tenía programado el aviso.
+
 ### Avisos push con la app cerrada (PWA en Android e iOS)
 
 Los avisos push permiten que la PWA reciba recordatorios cerrada en Android (Chrome, Edge, Firefox), en escritorio y en iPhone o iPad con iOS/iPadOS 16.4 o posterior. En iOS solo funcionan desde la app añadida a la pantalla de inicio. Las apps de Windows (Tauri) y Android (Capacitor) siguen usando sus avisos nativos.

@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   eventFrequencies,
   eventOccurrences,
@@ -24,11 +24,87 @@ import { CloseDialogButton } from "./app-overlays";
 import { localStamp } from "./calendar-schedule";
 import { InterfaceIcon } from "./interface-icon";
 import {
+  reminderPermission,
+  reminderPermissionEvent,
+  requestReminderPermission,
+} from "./reminders";
+import {
   useWorkspaceShortcuts,
   type ShortcutBindings,
 } from "./workspace-shortcuts";
 
 const frequencies = { daily: "Diaria", weekly: "Semanal", monthly: "Mensual" };
+const reminderOptions = [0, 5, 10, 15, 30, 60, 120, 1440, 10080];
+
+function reminderLabel(minutes: number) {
+  if (minutes === 0) return "A la hora del evento";
+  if (minutes === 60) return "1 hora antes";
+  if (minutes === 120) return "2 horas antes";
+  if (minutes === 1440) return "24 horas antes";
+  if (minutes === 10080) return "7 días antes";
+  return `${minutes} minutos antes`;
+}
+
+function EventReminderPermission() {
+  const [permission, setPermission] = useState<string>();
+  const [message, setMessage] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void reminderPermission().then(
+        (value) => {
+          if (active) setPermission(value);
+        },
+        () => {
+          if (active) setPermission("unsupported");
+        },
+      );
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener(reminderPermissionEvent, refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(reminderPermissionEvent, refresh);
+    };
+  }, []);
+  if (!permission || permission === "granted") return null;
+  return (
+    <div className="grid gap-1 text-sm">
+      {permission === "unsupported" ? (
+        <p className="text-muted">Este dispositivo no admite avisos locales.</p>
+      ) : (
+        <button
+          type="button"
+          className="topbar-button justify-self-start px-3"
+          disabled={requesting}
+          onClick={() => {
+            setRequesting(true);
+            setMessage("");
+            void requestReminderPermission()
+              .catch((error: unknown) =>
+                setMessage(
+                  error instanceof Error
+                    ? error.message
+                    : "No se pudo activar el aviso.",
+                ),
+              )
+              .finally(() => setRequesting(false));
+          }}
+        >
+          Permitir avisos en este dispositivo
+        </button>
+      )}
+      {message && (
+        <p role="alert" className="text-danger">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
 export const calendarZone =
   Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const monthLabel = new Intl.DateTimeFormat("es", {
@@ -335,12 +411,16 @@ export function EventDialog({
 
   function save(input: EventInput) {
     if (!editorEvent) return write(() => store.create(input));
-    const { title, notes, color, timing } = input;
+    const { title, notes, color, timing, reminderMinutes } = input;
     const previousTiming = editorEvent.timing;
     const changes = {
       ...(title !== editorEvent.title && { title }),
       ...(notes !== editorEvent.notes && { notes }),
       ...(color !== editorEvent.color && { color }),
+      ...((reminderMinutes ?? null) !==
+        (editorEvent.reminderMinutes ?? null) && {
+        reminderMinutes: reminderMinutes ?? null,
+      }),
       ...((timing.start !== previousTiming.start ||
         timing.end !== previousTiming.end ||
         timing.allDay !== previousTiming.allDay ||
@@ -579,6 +659,16 @@ export function EventDialog({
                 {occurrence.event.notes}
               </p>
             )}
+            {occurrence.event.reminderMinutes != null && (
+              <>
+                <p className="text-sm text-muted">
+                  {occurrence.event.timing.allDay
+                    ? `Recordatorio de día completo · ${occurrence.event.reminderMinutes === 0 ? "09:00, hora local" : `${reminderLabel(occurrence.event.reminderMinutes)} de las 09:00`}`
+                    : `Recordatorio · ${reminderLabel(occurrence.event.reminderMinutes)}`}
+                </p>
+                <EventReminderPermission />
+              </>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => setMode(recurring ? "choose-edit" : "editor")}
@@ -663,6 +753,7 @@ function EventEditor({
     editRecurrence ? (original?.recurrence?.frequency ?? "") : "",
   );
   const [useColor, setUseColor] = useState(Boolean(original?.color));
+  const [reminder, setReminder] = useState(original?.reminderMinutes ?? null);
   const [defaults] = useState(() => {
     const day = date ?? localStamp(new Date()).slice(0, 10);
     return { start: `${day}T09:00`, end: `${day}T10:00` };
@@ -694,6 +785,7 @@ function EventEditor({
           title: text("title").trim(),
           notes: text("notes").trim(),
           color: useColor ? text("color") : null,
+          reminderMinutes: reminder,
           timing: allDay
             ? {
                 allDay: true,
@@ -848,6 +940,37 @@ function EventEditor({
             Se omitirán los meses que no tengan ese día.
           </p>
         )}
+        <label className="grid gap-1">
+          Recordatorio
+          <select
+            className={field}
+            value={reminder ?? ""}
+            onChange={(event) =>
+              setReminder(
+                event.target.value === "" ? null : Number(event.target.value),
+              )
+            }
+          >
+            <option value="">Sin recordatorio</option>
+            {reminderOptions.map((minutes) => (
+              <option key={minutes} value={minutes}>
+                {allDay && minutes === 0
+                  ? "A las 09:00"
+                  : reminderLabel(minutes)}
+              </option>
+            ))}
+            {reminder !== null && !reminderOptions.includes(reminder) && (
+              <option value={reminder}>{reminderLabel(reminder)}</option>
+            )}
+          </select>
+        </label>
+        {allDay && reminder !== null && (
+          <p className="text-muted">
+            El aviso se calcula a partir de las 09:00 del primer día, en la zona
+            de este dispositivo.
+          </p>
+        )}
+        {reminder !== null && <EventReminderPermission />}
         <label className="grid gap-1">
           Notas (opcional)
           <textarea
