@@ -25,6 +25,9 @@
   --calendar-event: #eee9fb;
   --calendar-event-line: #aa91ed;
   --calendar-event-text: #4e358d;
+  --workspace-cover: #f0eafb;
+  --project-cover: #f4eee6;
+  --dashboard-selected: #e8dfff;
   --radius: 0.75rem;
 }
 
@@ -52,6 +55,9 @@
   --calendar-event: #382953;
   --calendar-event-line: #9d82dc;
   --calendar-event-text: #e6daff;
+  --workspace-cover: #302641;
+  --project-cover: #332c31;
+  --dashboard-selected: #47365f;
 }
 
 @theme inline {
@@ -70,6 +76,9 @@
   --color-danger-button: var(--danger-button);
   --color-success: var(--success);
   --color-success-tint: var(--success-tint);
+  --color-workspace-cover: var(--workspace-cover);
+  --color-project-cover: var(--project-cover);
+  --color-dashboard-selected: var(--dashboard-selected);
   --radius-md: calc(var(--radius) - 2px);
 }
 
@@ -314,6 +323,258 @@ dialog::backdrop {
 
   .action-popover {
     @apply absolute end-0 z-20 mt-1 min-w-max rounded-lg border border-line bg-paper shadow-lg;
+  }
+}
+
+@layer components {
+  .dashboard-page {
+    @apply grid gap-8;
+  }
+
+  .dashboard-intro {
+    @apply flex flex-wrap items-end justify-between gap-4;
+  }
+
+  .dashboard-intro h1 {
+    @apply mt-1 text-3xl font-semibold tracking-tight;
+  }
+
+  .dashboard-intro-copy {
+    @apply mt-2 max-w-xl text-sm text-muted;
+  }
+
+  .dashboard-eyebrow {
+    @apply text-[0.65rem] font-bold tracking-[0.13em] text-muted uppercase;
+  }
+
+  .dashboard-section {
+    @apply grid gap-4;
+  }
+
+  .dashboard-section-heading {
+    @apply flex flex-wrap items-end justify-between gap-3;
+  }
+
+  .dashboard-section-heading h2 {
+    @apply mt-1 text-xl font-semibold tracking-tight;
+  }
+
+  .dashboard-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .dashboard-section-meta,
+  .dashboard-inline-note {
+    @apply text-xs text-muted;
+  }
+
+  .dashboard-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    gap: 0.85rem;
+  }
+
+  .dashboard-card {
+    @apply flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-paper text-left shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
+
+  .dashboard-card[aria-pressed="true"] {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--dashboard-selected);
+  }
+
+  .dashboard-cover {
+    @apply relative block aspect-[16/9] overflow-hidden bg-workspace-cover;
+  }
+
+  .dashboard-cover img {
+    @apply size-full object-cover transition duration-300 group-hover:scale-[1.03];
+  }
+
+  .dashboard-cover-wash {
+    @apply absolute inset-0;
+    background: linear-gradient(
+      135deg,
+      rgb(91 62 173 / 9%),
+      transparent 55%,
+      rgb(255 255 255 / 15%)
+    );
+  }
+
+  .cover-variant-1 .dashboard-cover-wash {
+    background: linear-gradient(
+      135deg,
+      rgb(68 125 112 / 18%),
+      transparent 60%,
+      rgb(112 71 235 / 14%)
+    );
+  }
+
+  .cover-variant-2 .dashboard-cover-wash {
+    background: linear-gradient(
+      135deg,
+      rgb(190 129 71 / 14%),
+      transparent 58%,
+      rgb(112 71 235 / 16%)
+    );
+  }
+
+  .dashboard-cover-badge {
+    @apply absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/85 px-2.5 py-1 text-[0.68rem] font-semibold text-[#33254c] shadow-sm backdrop-blur-sm;
+  }
+
+  .dashboard-card-copy {
+    @apply grid gap-1 px-4 pt-3.5;
+  }
+
+  .dashboard-card-title {
+    @apply truncate text-sm font-semibold text-foreground;
+  }
+
+  .dashboard-card-description {
+    @apply min-h-9 text-xs leading-5 text-muted;
+  }
+
+  .dashboard-card-footer {
+    @apply mt-auto flex items-center justify-between border-t border-line px-4 py-2.5 text-[0.68rem] text-muted;
+  }
+
+  .project-cover {
+    @apply bg-project-cover;
+  }
+
+  .project-cover-mark {
+    @apply absolute right-3 bottom-3 size-3 rounded-full ring-4 ring-white/75;
+  }
+
+  .project-card-label {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .dashboard-empty-projects,
+  .dashboard-empty-widgets {
+    @apply flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-control-line bg-paper px-5 py-5;
+  }
+
+  .dashboard-empty-projects h3 {
+    @apply text-sm font-semibold;
+  }
+
+  .dashboard-empty-projects p,
+  .dashboard-empty-widgets p {
+    @apply mt-1 text-xs text-muted;
+  }
+
+  .dashboard-empty-icon,
+  .dashboard-widget-icon {
+    @apply grid size-10 shrink-0 place-items-center rounded-xl bg-tint text-accent-ink;
+  }
+
+  .dashboard-personal-section {
+    @apply rounded-2xl border border-line bg-panel/60 p-4 sm:p-5;
+  }
+
+  .dashboard-customizer {
+    @apply relative;
+  }
+
+  .dashboard-customizer summary {
+    list-style: none;
+  }
+
+  .dashboard-customizer summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .dashboard-customizer-popover {
+    @apply absolute end-0 z-20 mt-2 grid min-w-56 gap-2 rounded-xl border border-line bg-paper p-3 text-sm shadow-lg;
+  }
+
+  .dashboard-customizer-popover > p {
+    @apply mb-1 text-xs font-semibold text-muted;
+  }
+
+  .dashboard-customizer-popover label {
+    @apply flex min-h-9 items-center gap-2 rounded-md px-1 text-foreground;
+  }
+
+  .dashboard-customizer-popover input {
+    @apply size-4 accent-primary;
+  }
+
+  .dashboard-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0.85rem;
+  }
+
+  .dashboard-widget {
+    @apply flex min-h-60 flex-col rounded-xl border border-line bg-paper p-4;
+  }
+
+  .dashboard-widget-heading {
+    @apply flex items-center gap-3;
+  }
+
+  .dashboard-widget-heading h3 {
+    @apply truncate text-sm font-semibold;
+  }
+
+  .dashboard-widget-heading p {
+    @apply mt-0.5 text-[0.68rem] text-muted;
+  }
+
+  .dashboard-task-list,
+  .dashboard-agenda-list {
+    @apply mt-4 grid gap-2;
+  }
+
+  .dashboard-task-list li {
+    @apply flex min-w-0 items-center gap-2.5 rounded-lg bg-panel px-2.5 py-2 text-xs;
+  }
+
+  .dashboard-status-dot {
+    @apply size-2 shrink-0 rounded-full bg-control-line;
+  }
+
+  .dashboard-status-dot.status-doing {
+    @apply bg-primary;
+  }
+
+  .dashboard-status-dot.status-done {
+    @apply bg-success;
+  }
+
+  .dashboard-widget-empty {
+    @apply mt-5 rounded-lg bg-panel px-3 py-4 text-xs text-muted;
+  }
+
+  .dashboard-widget-link {
+    @apply mt-auto inline-flex min-h-9 items-center gap-1.5 self-start pt-3 text-xs font-semibold text-accent-ink hover:text-primary focus-visible:outline-2 focus-visible:outline-primary;
+  }
+
+  .dashboard-agenda-list li {
+    @apply grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2 border-b border-line pb-2 text-xs last:border-b-0;
+  }
+
+  .dashboard-agenda-list time {
+    @apply text-[0.68rem] text-muted;
+  }
+
+  .dashboard-calendar-grid {
+    @apply mt-4 grid grid-cols-7 gap-y-1 text-center text-xs;
+  }
+
+  .dashboard-calendar-weekday {
+    @apply py-1 text-[0.65rem] font-semibold text-muted;
+  }
+
+  .dashboard-calendar-day {
+    @apply mx-auto grid size-7 place-items-center rounded-full text-xs text-foreground;
+  }
+
+  .dashboard-calendar-day.is-today {
+    @apply bg-primary font-semibold text-primary-foreground;
   }
 }
 

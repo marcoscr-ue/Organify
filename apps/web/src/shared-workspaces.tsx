@@ -1,6 +1,8 @@
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type FormEvent,
@@ -134,16 +136,11 @@ export function useSharedWorkspaces(session: WorkspaceSession | undefined) {
   };
 }
 
-export function WorkspacePicker({
-  session,
-  spaces,
-  space,
-  error,
-  status,
-  disabled,
-  onSelect,
-  refresh,
-}: {
+export interface WorkspacePickerHandle {
+  open: () => void;
+}
+
+type WorkspacePickerProps = {
   session?: WorkspaceSession;
   spaces: ConnectedWorkspace[];
   space?: ConnectedWorkspace;
@@ -152,7 +149,15 @@ export function WorkspacePicker({
   disabled: boolean;
   onSelect: (id?: string) => void;
   refresh: () => Promise<ConnectedWorkspace[]>;
-}) {
+};
+
+export const WorkspacePicker = forwardRef<
+  WorkspacePickerHandle,
+  WorkspacePickerProps
+>(function WorkspacePicker(
+  { session, spaces, space, error, status, disabled, onSelect, refresh },
+  ref,
+) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<"create" | "accept" | "manage">("create");
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -165,7 +170,7 @@ export function WorkspacePicker({
     space?: ConnectedWorkspace;
   }>();
 
-  async function run(action: () => Promise<void>) {
+  const run = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
     setMessage("");
     try {
@@ -175,9 +180,9 @@ export function WorkspacePicker({
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
 
-  function open() {
+  const open = useCallback(() => {
     if (!session) return;
     const selected = space?.owner ? space : undefined;
     setContext({ session, space: selected });
@@ -191,7 +196,9 @@ export function WorkspacePicker({
       void run(async () =>
         setMembers(await listWorkspaceMembers(session, selected.id)),
       );
-  }
+  }, [session, space, run]);
+
+  useImperativeHandle(ref, () => ({ open }), [open]);
 
   const hasAccess =
     context?.session === session &&
@@ -457,4 +464,4 @@ export function WorkspacePicker({
       </dialog>
     </div>
   );
-}
+});

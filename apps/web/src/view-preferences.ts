@@ -10,7 +10,22 @@ export const inboxes = [
   { id: "undated", label: "Sin fecha" },
 ] as const satisfies ReadonlyArray<{ id: Inbox; label: string }>;
 
+export const dashboardWidgetIds = [
+  "today",
+  "in-progress",
+  "agenda",
+  "calendar",
+] as const;
+export type DashboardWidgetId = (typeof dashboardWidgetIds)[number];
+
+const defaultDashboardWidgets: DashboardWidgetId[] = [
+  "today",
+  "in-progress",
+  "agenda",
+];
+
 export const startupViews = [
+  { id: "home", label: "Inicio" },
   ...inboxes,
   { id: "board", label: "Tablero" },
   { id: "calendar", label: "Calendario" },
@@ -29,9 +44,18 @@ function readPreferences() {
   } catch {
     // Use defaults if the stored preferences cannot be read.
   }
+  const savedWidgets = Array.isArray(saved?.dashboardWidgets)
+    ? saved.dashboardWidgets.filter(
+        (widget): widget is DashboardWidgetId =>
+          typeof widget === "string" &&
+          dashboardWidgetIds.includes(widget as DashboardWidgetId),
+      )
+    : [...defaultDashboardWidgets];
+
   return {
     startupView:
-      startupViews.find(({ id }) => id === saved?.startupView)?.id ?? "today",
+      startupViews.find(({ id }) => id === saved?.startupView)?.id ?? "home",
+    dashboardWidgets: [...new Set(savedWidgets)],
     hideTaskStatus: saved?.hideTaskStatus === true,
     fontSize: fontSizes.find((size) => size === saved?.fontSize) ?? 100,
     tasksInWindows: saved?.tasksInWindows === true,

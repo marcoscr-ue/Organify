@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Capacitor } from "@capacitor/core";
 import type { TaskRepositories } from "@organify/storage";
@@ -611,6 +612,7 @@ function AppDialog({
   trigger,
   triggerClass,
   wide = false,
+  dialogRef,
   children,
 }: {
   title: string;
@@ -619,9 +621,11 @@ function AppDialog({
   trigger: ReactNode;
   triggerClass: string;
   wide?: boolean;
+  dialogRef?: RefObject<HTMLDialogElement | null>;
   children: ReactNode;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const internalDialog = useRef<HTMLDialogElement>(null);
+  const dialog = dialogRef ?? internalDialog;
   const titleId = useId();
   return (
     <>
@@ -945,6 +949,7 @@ export function AppControls({
   onThemeChange,
   preferences,
   viewPreferences,
+  dialogRef,
 }: {
   store: TaskRepositories["sync"];
   onWorkspaceSession: (session?: WorkspaceSession) => void;
@@ -952,6 +957,7 @@ export function AppControls({
   onThemeChange: (dark: boolean) => void;
   preferences: WorkspacePreferences;
   viewPreferences: ViewPreferences;
+  dialogRef?: RefObject<HTMLDialogElement | null>;
 }) {
   const [status, setStatus] = useState<SyncStatus>("inactive");
   const [settings, setSettings] = useState<
@@ -973,6 +979,7 @@ export function AppControls({
         title="Ajustes"
         wide
         triggerClass={iconButtonClass}
+        dialogRef={dialogRef}
         trigger={
           <svg
             aria-hidden="true"

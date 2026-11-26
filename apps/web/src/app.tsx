@@ -86,7 +86,12 @@ import {
 } from "./workspace-shortcuts";
 import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 import { inboxes, useViewPreferences } from "./view-preferences";
-import { useSharedWorkspaces, WorkspacePicker } from "./shared-workspaces";
+import {
+  useSharedWorkspaces,
+  WorkspacePicker,
+  type WorkspacePickerHandle,
+} from "./shared-workspaces";
+import { HomeDashboard } from "./home-dashboard";
 import type { WorkspaceSession } from "./workspace-connection";
 
 const personalRepositories = createTaskRepositories();
@@ -671,13 +676,17 @@ export function App() {
     : undefined;
   const compactNavigation = useCompactNavigation();
   const navigation = useRef<HTMLDialogElement>(null);
+  const workspacePicker = useRef<WorkspacePickerHandle>(null);
+  const settingsDialog = useRef<HTMLDialogElement>(null);
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
-  const [section, setSection] = useState<"tasks" | "routines" | "events">(
-    !floating && (startupView === "routines" || startupView === "events")
-      ? startupView
-      : "tasks",
+  const [section, setSection] = useState<"home" | "tasks" | "routines" | "events">(
+    !floating && startupView === "home"
+      ? "home"
+      : !floating && (startupView === "routines" || startupView === "events")
+        ? startupView
+        : "tasks",
   );
   const [eventAction, setEventAction] = useState<EventDialogAction>();
   const showRoutines = section === "routines";
@@ -900,6 +909,15 @@ export function App() {
     setSelectedId(undefined);
   }
 
+  function openHome() {
+    navigation.current?.close();
+    setSection("home");
+    setProjectId(undefined);
+    setSelectedId(undefined);
+    setTaskSearch("");
+    setStatusFilter(undefined);
+  }
+
   async function openTask(id: Id, edit = false, title?: string) {
     setNotice("");
     setError("");
@@ -1087,12 +1105,14 @@ export function App() {
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const activeProject = projectId ? projectById.get(projectId) : undefined;
   const heading =
-    activeProject?.name ??
-    (showEvents
-      ? "Eventos"
-      : showRoutines
-        ? "Rutinas"
-        : inboxes.find(({ id }) => id === activeInbox)?.label);
+    section === "home"
+      ? "Inicio"
+      : activeProject?.name ??
+        (showEvents
+          ? "Eventos"
+          : showRoutines
+            ? "Rutinas"
+            : inboxes.find(({ id }) => id === activeInbox)?.label);
   const isToday = section === "tasks" && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
@@ -1119,6 +1139,7 @@ export function App() {
         label: `Ir a ${label}`,
         run: () => navigate(id),
       })),
+      { label: "Volver al inicio", run: openHome },
       { label: "Ir a Rutinas", run: openRoutines },
       { label: "Ir a Eventos", run: openEvents },
       ...projects.map(({ id, name }) => ({
@@ -1445,12 +1466,14 @@ export function App() {
               onWorkspaceSession={setWorkspaceSession}
               darkMode={darkMode}
               onThemeChange={changeTheme}
+              dialogRef={settingsDialog}
             />
           </div>
           {desktopWindow && <DesktopWindowControls />}
         </header>
         <WorkspaceSidebar compact={compactNavigation} drawer={navigation}>
           <WorkspacePicker
+            ref={workspacePicker}
             session={workspaceSession}
             spaces={sharedWorkspaces.spaces}
             space={space}
@@ -1468,6 +1491,14 @@ export function App() {
               aria-label="Vistas"
               className="grid min-w-0 content-start gap-1"
             >
+              <button
+                type="button"
+                className="nav-link flex items-center gap-2.5"
+                aria-current={section === "home" ? "page" : undefined}
+                onClick={openHome}
+              >
+                <InterfaceIcon name="home" /> Inicio
+              </button>
               <details
                 className="task-nav-group"
                 open={tasksOpen}
@@ -1574,6 +1605,45 @@ export function App() {
         </WorkspaceSidebar>
 
         <main className="app-content">
+          {section === "home" && (
+            <HomeDashboard
+              spaces={sharedWorkspaces.spaces}
+              selectedSpaceId={selectedSpaceId}
+              projects={projects}
+              items={snapshot?.items ?? []}
+              events={snapshot?.events ?? []}
+              now={today}
+              loading={
+                Boolean(workspaceSession) &&
+                !sharedWorkspaces.spaces.length &&
+                !sharedWorkspaces.error
+              }
+              error={Boolean(sharedWorkspaces.error)}
+              widgets={viewPreferences.dashboardWidgets}
+              onWidgetsChange={(widgets) =>
+                viewPreferences.save({ dashboardWidgets: widgets })
+              }
+              canAddWorkspace={Boolean(workspaceSession)}
+              onSelectSpace={changeWorkspace}
+              onSelectProject={(id) => navigate("all", id)}
+              onAddWorkspace={() =>
+                workspaceSession
+                  ? workspacePicker.current?.open()
+                  : settingsDialog.current?.showModal()
+              }
+              onOpenPreferences={() => settingsDialog.current?.showModal()}
+              onOpenInbox={(id) => navigate(id)}
+              onOpenAgenda={openEvents}
+              onOpenCalendar={() => {
+                setSection("tasks");
+                setProjectId(undefined);
+                setInbox("all");
+                setLayout("calendar");
+                setSelectedId(undefined);
+              }}
+            />
+          )}
+          <div hidden={section === "home"}>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
               {heading ?? "Tareas"}
@@ -1937,6 +2007,7 @@ export function App() {
                 ))}
             </div>
           </section>
+          </div>
         </main>
       </div>
 
