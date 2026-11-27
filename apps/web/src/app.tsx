@@ -1,3 +1,4 @@
+import { Dropdown } from "@/components/ui/dropdown";
 import { Dialog } from "@/components/ui/dialog";
 import {
   useEffect,
@@ -1794,7 +1795,7 @@ export function App() {
                     </span>
                   )}
                 </div>
-                <details className="relative">
+                <Dropdown className="relative">
                   <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
                     <InterfaceIcon name="filter" />
                     Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
@@ -1822,7 +1823,7 @@ export function App() {
                       <option value="done">Hecha</option>
                     </select>
                   </div>
-                </details>
+                </Dropdown>
               </div>
               {quickCapture}
 
@@ -1936,7 +1937,7 @@ export function App() {
                                 onChange={(status) => move(item.id, status)}
                               />
                             </div>
-                            <details className="relative" name="task-actions">
+                            <Dropdown className="relative" name="task-actions">
                               <summary
                                 className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
                                 aria-label={`Opciones de ${item.title}`}
@@ -1994,7 +1995,7 @@ export function App() {
                                   Eliminar tarea
                                 </button>
                               </div>
-                            </details>
+                            </Dropdown>
                           </li>
                         );
                       })}

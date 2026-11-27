@@ -1,3 +1,4 @@
+import { Dropdown } from "@/components/ui/dropdown";
 import { Children, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   eventOccurrences,
@@ -22,31 +23,8 @@ function SectionPreferences({
   rows: number;
   onChange: (rows: number) => void;
 }) {
-  const details = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    const dismiss = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !details.current?.contains(event.target)
-      ) {
-        details.current?.removeAttribute("open");
-      }
-    };
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, []);
   return (
-    <details
-      ref={details}
-      className="dashboard-customizer"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          details.current?.removeAttribute("open");
-          details.current?.querySelector("summary")?.focus();
-        }
-      }}
-    >
+    <Dropdown className="dashboard-customizer">
       <summary
         className="topbar-button gap-2 px-3"
         aria-label={`Preferencias de ${label}`}
@@ -72,7 +50,7 @@ function SectionPreferences({
           </select>
         </label>
       </div>
-    </details>
+    </Dropdown>
   );
 }
 
@@ -597,7 +575,7 @@ export function HomeDashboard({
             <p className="dashboard-eyebrow">TU VISTA, A TU RITMO</p>
             <h2 id="personal-panel-title">Tu panel personal</h2>
           </div>
-          <details className="dashboard-customizer">
+          <Dropdown className="dashboard-customizer">
             <summary className="topbar-button gap-2 px-3">
               <InterfaceIcon name="brush" />
               Personalizar
@@ -615,7 +593,7 @@ export function HomeDashboard({
                 </label>
               ))}
             </div>
-          </details>
+          </Dropdown>
         </div>
         {widgets.length ? (
           <div className="dashboard-widget-grid">
