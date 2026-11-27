@@ -263,9 +263,7 @@ export const WorkspacePicker = forwardRef<
       }
     >
       <label className={compact ? "min-w-0" : "grid gap-1"}>
-        {!compact && (
-          <span className="sidebar-label">Espacio de trabajo</span>
-        )}
+        {!compact && <span className="sidebar-label">Espacio de trabajo</span>}
         <select
           aria-label="Espacio de trabajo"
           className={

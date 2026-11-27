@@ -5,6 +5,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
+      "work/**",
       "**/dist/**",
       "**/coverage/**",
       "apps/desktop/src-tauri/target/**",

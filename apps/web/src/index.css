@@ -734,23 +734,23 @@ dialog::backdrop {
 .block-note a {
   @apply text-primary underline;
 }
-  .release-range-summary {
-    list-style: none;
-  }
+.release-range-summary {
+  list-style: none;
+}
 
-  .release-range-summary::-webkit-details-marker {
-    display: none;
-  }
+.release-range-summary::-webkit-details-marker {
+  display: none;
+}
 
-  .release-range-chevron {
-    transition: transform 150ms ease;
-  }
+.release-range-chevron {
+  transition: transform 150ms ease;
+}
 
-  .release-version-group[open] .release-range-chevron {
-    transform: rotate(180deg);
-  }
+.release-version-group[open] .release-range-chevron {
+  transform: rotate(180deg);
+}
 
-  /* Hide the release version rail scrollbar while keeping the list scrollable. */
+/* Hide the release version rail scrollbar while keeping the list scrollable. */
 .release-version-nav {
   scrollbar-width: none;
 }

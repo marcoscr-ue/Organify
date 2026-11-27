@@ -1407,7 +1407,9 @@ export function App() {
   return (
     <div className="min-h-svh">
       <AutomaticReleaseNotes />
-      <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+      <div
+        className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+      >
         <header
           className={`app-topbar ${desktopWindow ? "app-topbar-desktop" : ""}`}
         >
@@ -1440,7 +1442,9 @@ export function App() {
                 }}
                 refresh={sharedWorkspaces.refresh}
               />
-              <span aria-hidden="true" className="hidden md:inline">/</span>
+              <span aria-hidden="true" className="hidden md:inline">
+                /
+              </span>
               <span className="hidden truncate text-sm font-semibold text-foreground md:inline md:text-xs md:break-all md:whitespace-normal">
                 {heading ?? "Tareas"}
               </span>

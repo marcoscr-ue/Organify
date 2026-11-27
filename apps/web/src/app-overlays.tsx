@@ -822,7 +822,7 @@ function groupReleasePatches(entries: Release[]) {
       label:
         versions.length > 1
           ? `${major}.${minor}.0-${major}.${minor}.${highestPatch}`
-          : versions[0].label ?? versions[0].version,
+          : (versions[0].label ?? versions[0].version),
     };
   });
 }
