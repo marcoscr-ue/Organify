@@ -681,7 +681,9 @@ export function App() {
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
-  const [section, setSection] = useState<"home" | "tasks" | "routines" | "events">(
+  const [section, setSection] = useState<
+    "home" | "tasks" | "routines" | "events"
+  >(
     !floating && startupView === "home"
       ? "home"
       : !floating && (startupView === "routines" || startupView === "events")
@@ -1108,12 +1110,12 @@ export function App() {
   const heading =
     section === "home"
       ? "Inicio"
-      : activeProject?.name ??
+      : (activeProject?.name ??
         (showEvents
           ? "Eventos"
           : showRoutines
             ? "Rutinas"
-            : inboxes.find(({ id }) => id === activeInbox)?.label);
+            : inboxes.find(({ id }) => id === activeInbox)?.label));
   const isToday = section === "tasks" && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
@@ -1646,369 +1648,369 @@ export function App() {
             />
           )}
           <div hidden={section === "home"}>
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
-              {heading ?? "Tareas"}
-            </h1>
-            <time
-              className="date-card"
-              dateTime={localStamp(today).slice(0, 10)}
-            >
-              <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
-                <InterfaceIcon name="calendar" />
-              </span>
-              {formatToday(today)}
-            </time>
-          </div>
-          {activeProject && (
-            <nav
-              aria-label="Contenido del proyecto"
-              className="mb-4 flex flex-wrap gap-2"
-            >
-              {(
-                [
-                  { id: "tasks", label: "Tareas" },
-                  { id: "routines", label: "Rutinas" },
-                  { id: "events", label: "Eventos" },
-                ] as const
-              ).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="topbar-button px-3 aria-[current=page]:bg-tint aria-[current=page]:text-accent-ink"
-                  aria-current={section === id ? "page" : undefined}
-                  onClick={() => {
-                    setSection(id);
-                    setSelectedId(undefined);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
-          )}
-          {!space && snapshot && isToday && (
-            <section className="focus-card" aria-labelledby="focus-title">
-              <div className="relative z-10">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
-                  <InterfaceIcon name="sparkles" />
-                  Enfoque diario
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
+                {heading ?? "Tareas"}
+              </h1>
+              <time
+                className="date-card"
+                dateTime={localStamp(today).slice(0, 10)}
+              >
+                <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
+                  <InterfaceIcon name="calendar" />
                 </span>
-                <h2
-                  id="focus-title"
-                  className="mt-2 text-2xl font-semibold tracking-tight"
-                >
-                  Tareas de hoy
-                </h2>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-muted">
-                  <progress
-                    className="focus-progress"
-                    aria-label="Progreso de hoy"
-                    value={doneToday}
-                    max={todayItems.length || 1}
-                  />
-                  <span>
-                    {doneToday} de {todayItems.length} completadas
+                {formatToday(today)}
+              </time>
+            </div>
+            {activeProject && (
+              <nav
+                aria-label="Contenido del proyecto"
+                className="mb-4 flex flex-wrap gap-2"
+              >
+                {(
+                  [
+                    { id: "tasks", label: "Tareas" },
+                    { id: "routines", label: "Rutinas" },
+                    { id: "events", label: "Eventos" },
+                  ] as const
+                ).map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="topbar-button px-3 aria-[current=page]:bg-tint aria-[current=page]:text-accent-ink"
+                    aria-current={section === id ? "page" : undefined}
+                    onClick={() => {
+                      setSection(id);
+                      setSelectedId(undefined);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
+            )}
+            {!space && snapshot && isToday && (
+              <section className="focus-card" aria-labelledby="focus-title">
+                <div className="relative z-10">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
+                    <InterfaceIcon name="sparkles" />
+                    Enfoque diario
                   </span>
+                  <h2
+                    id="focus-title"
+                    className="mt-2 text-2xl font-semibold tracking-tight"
+                  >
+                    Tareas de hoy
+                  </h2>
+                  <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-muted">
+                    <progress
+                      className="focus-progress"
+                      aria-label="Progreso de hoy"
+                      value={doneToday}
+                      max={todayItems.length || 1}
+                    />
+                    <span>
+                      {doneToday} de {todayItems.length} completadas
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="focus-art" aria-hidden="true">
-                <span className="focus-orbit" />
-                <span className="focus-orbit focus-orbit-outer" />
-                <span className="focus-symbol">
-                  <InterfaceIcon name="check" className="size-8" />
-                </span>
-                <InterfaceIcon
-                  name="sparkles"
-                  className="absolute top-8 left-7 size-4 text-primary"
+                <div className="focus-art" aria-hidden="true">
+                  <span className="focus-orbit" />
+                  <span className="focus-orbit focus-orbit-outer" />
+                  <span className="focus-symbol">
+                    <InterfaceIcon name="check" className="size-8" />
+                  </span>
+                  <InterfaceIcon
+                    name="sparkles"
+                    className="absolute top-8 left-7 size-4 text-primary"
+                  />
+                  <InterfaceIcon
+                    name="sparkles"
+                    className="absolute right-4 bottom-8 size-5 text-primary"
+                  />
+                </div>
+              </section>
+            )}
+            {showEvents &&
+              (snapshot ? (
+                <EventsAgenda
+                  key={projectId ?? "all"}
+                  events={scopedEvents}
+                  create={(date) => setEventAction({ date })}
+                  open={setEventAction}
+                  bindings={bindings}
                 />
-                <InterfaceIcon
-                  name="sparkles"
-                  className="absolute right-4 bottom-8 size-5 text-primary"
+              ) : (
+                <p className="text-sm text-muted" role="status">
+                  {readError
+                    ? "No se pudieron cargar los eventos."
+                    : "Cargando eventos."}
+                </p>
+              ))}
+            {showRoutines &&
+              (snapshot ? (
+                <RoutinesWorkspace
+                  key={projectId ?? "all"}
+                  mode="routines"
+                  routines={snapshot.routines.filter(
+                    (routine) => !projectId || routine.projectId === projectId,
+                  )}
+                  projects={projects}
+                  projectId={projectId}
+                  now={now}
+                  store={repositories.routines}
+                  openRoutines={openRoutines}
+                  bindings={bindings}
                 />
-              </div>
-            </section>
-          )}
-          {showEvents &&
-            (snapshot ? (
-              <EventsAgenda
-                key={projectId ?? "all"}
-                events={scopedEvents}
-                create={(date) => setEventAction({ date })}
-                open={setEventAction}
-                bindings={bindings}
-              />
-            ) : (
-              <p className="text-sm text-muted" role="status">
-                {readError
-                  ? "No se pudieron cargar los eventos."
-                  : "Cargando eventos."}
-              </p>
-            ))}
-          {showRoutines &&
-            (snapshot ? (
+              ) : (
+                <p className="text-sm text-muted" role="status">
+                  {readError
+                    ? "No se pudieron cargar las rutinas."
+                    : "Cargando rutinas…"}
+                </p>
+              ))}
+            {snapshot && isToday && (
               <RoutinesWorkspace
-                key={projectId ?? "all"}
-                mode="routines"
-                routines={snapshot.routines.filter(
-                  (routine) => !projectId || routine.projectId === projectId,
-                )}
+                mode="today"
+                routines={snapshot.routines}
                 projects={projects}
-                projectId={projectId}
                 now={now}
                 store={repositories.routines}
                 openRoutines={openRoutines}
                 bindings={bindings}
               />
-            ) : (
-              <p className="text-sm text-muted" role="status">
-                {readError
-                  ? "No se pudieron cargar las rutinas."
-                  : "Cargando rutinas…"}
-              </p>
-            ))}
-          {snapshot && isToday && (
-            <RoutinesWorkspace
-              mode="today"
-              routines={snapshot.routines}
-              projects={projects}
-              now={now}
-              store={repositories.routines}
-              openRoutines={openRoutines}
-              bindings={bindings}
-            />
-          )}
-          <section
-            hidden={section !== "tasks"}
-            className="task-panel"
-            aria-labelledby="task-panel-title"
-          >
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <h2 id="task-panel-title" className="font-semibold">
-                  {isToday ? "Tareas de hoy" : "Tareas"}
-                </h2>
-                {snapshot && (
-                  <span
-                    className="task-count"
-                    aria-label={`${openCount} tareas sin completar`}
-                  >
-                    {openCount}
-                  </span>
-                )}
-              </div>
-              <details className="relative">
-                <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
-                  <InterfaceIcon name="filter" />
-                  Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
-                </summary>
-                <div className="action-popover p-2">
-                  <select
-                    className="field"
-                    aria-label="Filtrar por estado"
-                    value={statusFilter ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setStatusFilter(
-                        value === "todo" ||
-                          value === "doing" ||
-                          value === "done"
-                          ? value
-                          : undefined,
-                      );
-                      closeDisclosure(event.currentTarget);
-                    }}
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="todo">Pendiente</option>
-                    <option value="doing">En curso</option>
-                    <option value="done">Hecha</option>
-                  </select>
+            )}
+            <section
+              hidden={section !== "tasks"}
+              className="task-panel"
+              aria-labelledby="task-panel-title"
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 id="task-panel-title" className="font-semibold">
+                    {isToday ? "Tareas de hoy" : "Tareas"}
+                  </h2>
+                  {snapshot && (
+                    <span
+                      className="task-count"
+                      aria-label={`${openCount} tareas sin completar`}
+                    >
+                      {openCount}
+                    </span>
+                  )}
                 </div>
-              </details>
-            </div>
-            {quickCapture}
-
-            <div className="my-3 flex flex-wrap items-center justify-between gap-2">
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label="Presentación de tareas"
-              >
-                {layouts.map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="nav-link flex items-center gap-1.5 px-2.5 text-xs"
-                    aria-pressed={layout === id}
-                    onClick={() => setLayout(id)}
-                  >
-                    <InterfaceIcon name={icon} />
-                    {label}
-                  </button>
-                ))}
+                <details className="relative">
+                  <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
+                    <InterfaceIcon name="filter" />
+                    Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
+                  </summary>
+                  <div className="action-popover p-2">
+                    <select
+                      className="field"
+                      aria-label="Filtrar por estado"
+                      value={statusFilter ?? ""}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setStatusFilter(
+                          value === "todo" ||
+                            value === "doing" ||
+                            value === "done"
+                            ? value
+                            : undefined,
+                        );
+                        closeDisclosure(event.currentTarget);
+                      }}
+                    >
+                      <option value="">Todos los estados</option>
+                      <option value="todo">Pendiente</option>
+                      <option value="doing">En curso</option>
+                      <option value="done">Hecha</option>
+                    </select>
+                  </div>
+                </details>
               </div>
-              {!space && desktopWindow && layout !== "list" && (
-                <FloatButton
-                  label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
-                  onClick={() => void floatLayout()}
-                  disabled={openingView}
-                />
-              )}
-              <label className="search-field w-52">
-                <InterfaceIcon name="search" className="size-4 shrink-0" />
-                <input
-                  className="min-w-0 flex-1 text-foreground outline-none placeholder:text-muted"
-                  type="search"
-                  placeholder="Buscar por título"
-                  aria-label="Buscar por título"
-                  value={taskSearch}
-                  onChange={(event) => setTaskSearch(event.target.value)}
-                />
-              </label>
-            </div>
-            {!selected && feedback}
-            {viewLoading}
+              {quickCapture}
 
-            <div className="min-w-0">
-              {boardOrCalendar}
-              {snapshot &&
-                layout === "list" &&
-                (visible.length ? (
-                  <ul {...swipeHandlers}>
-                    {visible.map((item) => {
-                      const project = item.projectId
-                        ? projectById.get(item.projectId)
-                        : undefined;
-                      const done = item.status === "done";
-                      const date =
-                        activeInbox === "in-progress"
-                          ? dateLabel(item, latestTaskStart(item, today))
-                          : dateLabel(item);
-                      return (
-                        <li
-                          key={item.id}
-                          data-task-shortcut={item.id}
-                          className={`task-row ${swipeEnabled ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            aria-label={`Completar tarea: ${item.title}`}
-                            aria-pressed={done}
-                            className="task-check"
-                            onClick={() =>
-                              move(item.id, done ? "todo" : "done")
-                            }
+              <div className="my-3 flex flex-wrap items-center justify-between gap-2">
+                <div
+                  className="flex flex-wrap gap-1"
+                  role="group"
+                  aria-label="Presentación de tareas"
+                >
+                  {layouts.map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="nav-link flex items-center gap-1.5 px-2.5 text-xs"
+                      aria-pressed={layout === id}
+                      onClick={() => setLayout(id)}
+                    >
+                      <InterfaceIcon name={icon} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {!space && desktopWindow && layout !== "list" && (
+                  <FloatButton
+                    label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
+                    onClick={() => void floatLayout()}
+                    disabled={openingView}
+                  />
+                )}
+                <label className="search-field w-52">
+                  <InterfaceIcon name="search" className="size-4 shrink-0" />
+                  <input
+                    className="min-w-0 flex-1 text-foreground outline-none placeholder:text-muted"
+                    type="search"
+                    placeholder="Buscar por título"
+                    aria-label="Buscar por título"
+                    value={taskSearch}
+                    onChange={(event) => setTaskSearch(event.target.value)}
+                  />
+                </label>
+              </div>
+              {!selected && feedback}
+              {viewLoading}
+
+              <div className="min-w-0">
+                {boardOrCalendar}
+                {snapshot &&
+                  layout === "list" &&
+                  (visible.length ? (
+                    <ul {...swipeHandlers}>
+                      {visible.map((item) => {
+                        const project = item.projectId
+                          ? projectById.get(item.projectId)
+                          : undefined;
+                        const done = item.status === "done";
+                        const date =
+                          activeInbox === "in-progress"
+                            ? dateLabel(item, latestTaskStart(item, today))
+                            : dateLabel(item);
+                        return (
+                          <li
+                            key={item.id}
+                            data-task-shortcut={item.id}
+                            className={`task-row ${swipeEnabled ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
                           >
-                            {done && (
-                              <InterfaceIcon
-                                name="check"
-                                className="size-3.5"
-                              />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            data-swipe-handle
-                            className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
-                            onClick={() => openTask(item.id)}
-                          >
-                            <span
-                              className={`block text-sm font-semibold wrap-anywhere ${done ? "text-muted line-through" : ""}`}
+                            <button
+                              type="button"
+                              aria-label={`Completar tarea: ${item.title}`}
+                              aria-pressed={done}
+                              className="task-check"
+                              onClick={() =>
+                                move(item.id, done ? "todo" : "done")
+                              }
                             >
-                              {item.title}
-                            </span>
-                            {project && (
-                              <span className="project-tag">
-                                <span
-                                  aria-hidden="true"
-                                  className="project-dot"
-                                  style={{ backgroundColor: project.color }}
+                              {done && (
+                                <InterfaceIcon
+                                  name="check"
+                                  className="size-3.5"
                                 />
-                                {project.name}
-                              </span>
-                            )}
-                          </button>
-                          {date && (
-                            <span className="text-xs text-muted">{date}</span>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <TaskStatusIcon item={item} now={now} />
-                            <StatusSelect
-                              value={item.status}
-                              onChange={(status) => move(item.id, status)}
-                            />
-                          </div>
-                          <details className="relative" name="task-actions">
-                            <summary
-                              className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
-                              aria-label={`Opciones de ${item.title}`}
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              data-swipe-handle
+                              className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
+                              onClick={() => openTask(item.id)}
                             >
-                              <InterfaceIcon
-                                name="more"
-                                className="size-5 text-foreground [stroke-width:3]"
+                              <span
+                                className={`block text-sm font-semibold wrap-anywhere ${done ? "text-muted line-through" : ""}`}
+                              >
+                                {item.title}
+                              </span>
+                              {project && (
+                                <span className="project-tag">
+                                  <span
+                                    aria-hidden="true"
+                                    className="project-dot"
+                                    style={{ backgroundColor: project.color }}
+                                  />
+                                  {project.name}
+                                </span>
+                              )}
+                            </button>
+                            {date && (
+                              <span className="text-xs text-muted">{date}</span>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <TaskStatusIcon item={item} now={now} />
+                              <StatusSelect
+                                value={item.status}
+                                onChange={(status) => move(item.id, status)}
                               />
-                            </summary>
-                            <div className="action-popover p-1">
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  openTask(item.id, true);
-                                }}
+                            </div>
+                            <details className="relative" name="task-actions">
+                              <summary
+                                className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
+                                aria-label={`Opciones de ${item.title}`}
                               >
-                                <InterfaceIcon name="edit" />
-                                Editar tarea
-                              </button>
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  setRenameId(item.id);
-                                }}
-                              >
-                                <InterfaceIcon name="edit" />
-                                Renombrar tarea
-                              </button>
-                              {!space && desktopWindow && (
+                                <InterfaceIcon
+                                  name="more"
+                                  className="size-5 text-foreground [stroke-width:3]"
+                                />
+                              </summary>
+                              <div className="action-popover p-1">
                                 <button
                                   type="button"
                                   className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
                                   onClick={(event) => {
                                     closeDisclosure(event.currentTarget);
-                                    void floatTask(item);
+                                    openTask(item.id, true);
                                   }}
                                 >
-                                  <InterfaceIcon name="popout" />
-                                  Abrir en ventana
+                                  <InterfaceIcon name="edit" />
+                                  Editar tarea
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  setDeletion({ item });
-                                }}
-                              >
-                                <InterfaceIcon name="trash" />
-                                Eliminar tarea
-                              </button>
-                            </div>
-                          </details>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="border-t border-line p-6 text-center text-sm text-muted">
-                    No hay tareas en esta vista.
-                  </p>
-                ))}
-            </div>
-          </section>
+                                <button
+                                  type="button"
+                                  className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                  onClick={(event) => {
+                                    closeDisclosure(event.currentTarget);
+                                    setRenameId(item.id);
+                                  }}
+                                >
+                                  <InterfaceIcon name="edit" />
+                                  Renombrar tarea
+                                </button>
+                                {!space && desktopWindow && (
+                                  <button
+                                    type="button"
+                                    className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                    onClick={(event) => {
+                                      closeDisclosure(event.currentTarget);
+                                      void floatTask(item);
+                                    }}
+                                  >
+                                    <InterfaceIcon name="popout" />
+                                    Abrir en ventana
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
+                                  onClick={(event) => {
+                                    closeDisclosure(event.currentTarget);
+                                    setDeletion({ item });
+                                  }}
+                                >
+                                  <InterfaceIcon name="trash" />
+                                  Eliminar tarea
+                                </button>
+                              </div>
+                            </details>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="border-t border-line p-6 text-center text-sm text-muted">
+                      No hay tareas en esta vista.
+                    </p>
+                  ))}
+              </div>
+            </section>
           </div>
         </main>
       </div>
