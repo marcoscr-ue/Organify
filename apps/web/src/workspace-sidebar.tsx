@@ -23,11 +23,13 @@ export function WorkspaceSidebar({
   drawer,
   children,
   onHome,
+  onCollapse,
 }: {
   compact: boolean;
   drawer: RefObject<HTMLDialogElement | null>;
   children: ReactNode;
   onHome: () => void;
+  onCollapse: () => void;
 }) {
   const sidebar = (
     <aside className="app-sidebar">
@@ -46,6 +48,17 @@ export function WorkspaceSidebar({
             className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
           />
         </button>
+        {!compact && (
+          <button
+            type="button"
+            aria-label="Contraer barra lateral"
+            title="Contraer barra lateral"
+            className="sidebar-collapse-toggle"
+            onClick={onCollapse}
+          >
+            <InterfaceIcon name="chevron" className="size-4 rotate-90" />
+          </button>
+        )}
         {compact && (
           <button
             type="button"

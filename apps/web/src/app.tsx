@@ -675,6 +675,7 @@ export function App() {
     ? preferences.bindings
     : undefined;
   const compactNavigation = useCompactNavigation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigation = useRef<HTMLDialogElement>(null);
   const workspacePicker = useRef<WorkspacePickerHandle>(null);
   const settingsDialog = useRef<HTMLDialogElement>(null);
@@ -1406,7 +1407,7 @@ export function App() {
   return (
     <div className="min-h-svh">
       <AutomaticReleaseNotes />
-      <div className="app-shell">
+      <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
         <header
           className={`app-topbar ${desktopWindow ? "app-topbar-desktop" : ""}`}
         >
@@ -1423,14 +1424,24 @@ export function App() {
                 <InterfaceIcon name="menu" className="size-5" />
               </button>
             )}
-            <div className="hidden min-w-0 items-center gap-2 text-xs text-muted md:flex md:flex-wrap">
-              <span className="hidden md:inline">
-                {space?.name ?? "Personal"}
-              </span>
-              <span aria-hidden="true" className="hidden md:inline">
-                /
-              </span>
-              <span className="truncate text-sm font-semibold text-foreground md:text-xs md:break-all md:whitespace-normal">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
+              <WorkspacePicker
+                ref={workspacePicker}
+                compact
+                session={workspaceSession}
+                spaces={sharedWorkspaces.spaces}
+                space={space}
+                error={sharedWorkspaces.error}
+                status={space && sharedWorkspaces.statuses[space.membershipId]}
+                disabled={capturing || creatingProject}
+                onSelect={(id) => {
+                  changeWorkspace(id);
+                  navigation.current?.close();
+                }}
+                refresh={sharedWorkspaces.refresh}
+              />
+              <span aria-hidden="true" className="hidden md:inline">/</span>
+              <span className="hidden truncate text-sm font-semibold text-foreground md:inline md:text-xs md:break-all md:whitespace-normal">
                 {heading ?? "Tareas"}
               </span>
             </div>
@@ -1478,22 +1489,10 @@ export function App() {
           compact={compactNavigation}
           drawer={navigation}
           onHome={openHome}
+          onCollapse={() => setSidebarCollapsed(true)}
         >
-          <WorkspacePicker
-            ref={workspacePicker}
-            session={workspaceSession}
-            spaces={sharedWorkspaces.spaces}
-            space={space}
-            error={sharedWorkspaces.error}
-            status={space && sharedWorkspaces.statuses[space.membershipId]}
-            disabled={capturing || creatingProject}
-            onSelect={(id) => {
-              changeWorkspace(id);
-              navigation.current?.close();
-            }}
-            refresh={sharedWorkspaces.refresh}
-          />
           <div className="grid gap-2">
+            <h2 className="sidebar-label">Vistas principales</h2>
             <nav
               aria-label="Vistas"
               className="grid min-w-0 content-start gap-1"
@@ -1603,6 +1602,16 @@ export function App() {
             )}
           </div>
         </WorkspaceSidebar>
+        {!compactNavigation && sidebarCollapsed && (
+          <button
+            type="button"
+            className="sidebar-reopen-button"
+            aria-label="Abrir barra lateral"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <InterfaceIcon name="chevron" className="size-4 -rotate-90" />
+          </button>
+        )}
 
         <main className="app-content">
           {section === "home" && (

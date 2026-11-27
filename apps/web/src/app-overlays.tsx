@@ -803,6 +803,30 @@ export function AutomaticReleaseNotes() {
   );
 }
 
+function groupReleasePatches(entries: Release[]) {
+  const groups = new Map<string, Release[]>();
+  for (const entry of entries) {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(entry.version);
+    const key = match ? `${match[1]}.${match[2]}` : entry.version;
+    groups.set(key, [...(groups.get(key) ?? []), entry]);
+  }
+
+  return [...groups].map(([key, versions]) => {
+    const [major, minor] = key.split(".");
+    const highestPatch = Math.max(
+      ...versions.map((entry) => Number(entry.version.split(".")[2]) || 0),
+    );
+    return {
+      key,
+      entries: versions,
+      label:
+        versions.length > 1
+          ? `${major}.${minor}.0-${major}.${minor}.${highestPatch}`
+          : versions[0].label ?? versions[0].version,
+    };
+  });
+}
+
 export function ReleaseNotes() {
   const desktop = Boolean(window.__TAURI__);
   const platform = desktop
@@ -884,19 +908,59 @@ export function ReleaseNotes() {
                 <h3 className="px-1 py-1 text-xs font-semibold text-muted">
                   {releaseMonth.format(new Date(entries[0].date))}
                 </h3>
-                {entries.map((entry) => (
-                  <button
-                    key={entry.version}
-                    type="button"
-                    className="nav-link w-full px-2 text-xs"
-                    aria-current={
-                      activeVersion === entry.version ? "true" : undefined
-                    }
-                    onClick={() => scrollToVersion(entry.version)}
-                  >
-                    {entry.label ?? entry.version}
-                  </button>
-                ))}
+                {groupReleasePatches(entries).map((group) =>
+                  group.entries.length === 1 ? (
+                    <button
+                      key={group.key}
+                      type="button"
+                      className="nav-link w-full px-2 text-xs"
+                      aria-current={
+                        activeVersion === group.entries[0].version
+                          ? "true"
+                          : undefined
+                      }
+                      onClick={() => scrollToVersion(group.entries[0].version)}
+                    >
+                      {group.label}
+                    </button>
+                  ) : (
+                    <details key={group.key} className="release-version-group">
+                      <summary
+                        className="release-range-summary nav-link flex w-full items-center justify-between gap-1 px-2 text-xs"
+                        aria-current={
+                          group.entries.some(
+                            (entry) => entry.version === activeVersion,
+                          )
+                            ? "true"
+                            : undefined
+                        }
+                      >
+                        <span className="truncate">{group.label}</span>
+                        <InterfaceIcon
+                          name="chevron"
+                          className="release-range-chevron size-3 shrink-0"
+                        />
+                      </summary>
+                      <div className="grid gap-1 pl-2">
+                        {group.entries.map((entry) => (
+                          <button
+                            key={entry.version}
+                            type="button"
+                            className="nav-link w-full px-2 text-xs"
+                            aria-current={
+                              activeVersion === entry.version
+                                ? "true"
+                                : undefined
+                            }
+                            onClick={() => scrollToVersion(entry.version)}
+                          >
+                            {entry.label ?? entry.version}
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  ),
+                )}
               </section>
             ))}
           </nav>

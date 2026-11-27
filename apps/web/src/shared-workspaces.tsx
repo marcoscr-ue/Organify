@@ -142,6 +142,7 @@ export interface WorkspacePickerHandle {
 
 type WorkspacePickerProps = {
   session?: WorkspaceSession;
+  compact?: boolean;
   spaces: ConnectedWorkspace[];
   space?: ConnectedWorkspace;
   error?: string;
@@ -155,7 +156,17 @@ export const WorkspacePicker = forwardRef<
   WorkspacePickerHandle,
   WorkspacePickerProps
 >(function WorkspacePicker(
-  { session, spaces, space, error, status, disabled, onSelect, refresh },
+  {
+    session,
+    compact = false,
+    spaces,
+    space,
+    error,
+    status,
+    disabled,
+    onSelect,
+    refresh,
+  },
   ref,
 ) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -244,11 +255,22 @@ export const WorkspacePicker = forwardRef<
   }
 
   return (
-    <div className="grid gap-2">
-      <label className="grid gap-1">
-        <span className="sidebar-label">Espacio de trabajo</span>
+    <div
+      className={
+        compact
+          ? "workspace-picker-compact flex min-w-0 items-center gap-1"
+          : "grid gap-2"
+      }
+    >
+      <label className={compact ? "min-w-0" : "grid gap-1"}>
+        {!compact && (
+          <span className="sidebar-label">Espacio de trabajo</span>
+        )}
         <select
-          className="field min-w-0 w-full"
+          aria-label="Espacio de trabajo"
+          className={
+            compact ? "workspace-picker-select" : "field min-w-0 w-full"
+          }
           value={space?.id ?? ""}
           disabled={disabled}
           onChange={(event) => onSelect(event.target.value || undefined)}
@@ -264,15 +286,20 @@ export const WorkspacePicker = forwardRef<
       {session && (
         <button
           type="button"
-          className="nav-link text-left"
+          className={compact ? "workspace-picker-manage topbar-button" : "nav-link text-left"}
           onClick={open}
           disabled={disabled}
+          aria-label="Gestionar espacios compartidos"
+          title="Gestionar espacios compartidos"
         >
-          Espacios compartidos
+          {compact ? "Espacios" : "Espacios compartidos"}
         </button>
       )}
       {space && (
-        <p role="status" className="px-2 text-xs text-muted">
+        <p
+          role="status"
+          className={compact ? "sr-only" : "px-2 text-xs text-muted"}
+        >
           {status === "error"
             ? "Sincronización interrumpida. Los cambios se guardan en este dispositivo."
             : status === "synced"

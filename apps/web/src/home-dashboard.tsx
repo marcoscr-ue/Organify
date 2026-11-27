@@ -67,14 +67,16 @@ function WorkspaceCard({
           <InterfaceIcon name="board" />
           {ownerLabel}
         </span>
+        {selected && (
+          <span className="dashboard-selected-badge" aria-hidden="true">
+            <InterfaceIcon name="check" />
+            Seleccionado
+          </span>
+        )}
       </span>
       <span className="dashboard-card-copy">
         <span className="dashboard-card-title">{name}</span>
         <span className="dashboard-card-description">{description}</span>
-      </span>
-      <span className="dashboard-card-footer">
-        <span>{selected ? "Espacio actual" : "Abrir espacio"}</span>
-        <InterfaceIcon name="chevron" className="size-4 -rotate-90" />
       </span>
     </button>
   );
@@ -112,16 +114,6 @@ function ProjectCard({
       <span className="dashboard-card-copy">
         <span className="dashboard-card-title">{project.name}</span>
         <span className="dashboard-card-description">{description}</span>
-      </span>
-      <span className="dashboard-card-footer">
-        <span className="project-card-label">
-          <span
-            className="project-dot"
-            style={{ backgroundColor: project.color }}
-          />
-          Proyecto
-        </span>
-        <InterfaceIcon name="chevron" className="size-4 -rotate-90" />
       </span>
     </button>
   );
