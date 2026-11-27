@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   eventFrequencies,
@@ -521,16 +522,13 @@ export function EventDialog({
   };
 
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       aria-labelledby={titleId}
       className="routine-dialog"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) close();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) close();
       }}
     >
       <div className="routine-dialog-content">
@@ -755,7 +753,7 @@ export function EventDialog({
           </p>
         )}
       </div>
-    </dialog>
+    </Dialog>
   );
 }
 

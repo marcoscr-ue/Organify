@@ -56,6 +56,13 @@ function readPreferences() {
     startupView:
       startupViews.find(({ id }) => id === saved?.startupView)?.id ?? "home",
     dashboardWidgets: [...new Set(savedWidgets)],
+    dashboardWorkspaceRows:
+      [0, 1, 2, 3, 4, 5].find(
+        (rows) => rows === saved?.dashboardWorkspaceRows,
+      ) ?? 0,
+    dashboardProjectRows:
+      [0, 1, 2, 3, 4, 5].find((rows) => rows === saved?.dashboardProjectRows) ??
+      0,
     hideTaskStatus: saved?.hideTaskStatus === true,
     fontSize: fontSizes.find((size) => size === saved?.fontSize) ?? 100,
     tasksInWindows: saved?.tasksInWindows === true,

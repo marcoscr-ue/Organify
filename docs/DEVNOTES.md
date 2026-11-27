@@ -330,3 +330,12 @@ distinto en cada uno y vuelve a conectarlos. Comprueba que ambos cambios
 aparecen en los dos clientes. Yjs fusiona los cambios y su contenido viaja
 por la sincronización cifrada existente. Usa la misma configuración de
 Supabase de la Fase 3.
+
+## Inicio y creación de proyectos (0.17.0)
+
+- Desde el `+` junto a **Proyectos** en el sidebar o **Añadir proyecto** en Inicio, crea un proyecto con título y color. Comprueba que no admite un título vacío, que Cancelar y Escape cierran sin crear y que el color se conserva al recargar y sincronizar. Repite desde el menú móvil y en un espacio compartido.
+- Colapsa el sidebar en escritorio y pulsa el extremo izquierdo a distintas alturas para volver a abrirlo.
+- En Inicio, abre **Preferencias** de cada sección y elige de una a cinco filas o **Sin límite**. Comprueba que espacios y proyectos conservan ajustes independientes al recargar y al cambiar el ancho de la ventana. **Ver todos** permite consultar las tarjetas restantes sin cambiar la preferencia. Cierra el desplegable pulsando fuera o con Escape.
+- En **Tu panel personal**, comprueba que **Personalizar** muestra el pincel y sigue permitiendo elegir módulos.
+
+- En las ventanas modales, pulsa fuera para cerrarlas igual que con Escape. Comprueba que pulsar su relleno interior o arrastrar desde dentro hacia fuera no las cierra, y que respetan el bloqueo de cierre mientras guardan o borran.

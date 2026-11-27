@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Project, ProjectChanges } from "@organify/core";
 import { Button } from "@/components/ui/button";
@@ -199,7 +200,7 @@ function ProjectDialog({
   }
 
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       aria-labelledby={titleId}
       className="m-auto max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-line bg-paper p-5 text-foreground shadow-xl backdrop:bg-black/35"
@@ -267,6 +268,6 @@ function ProjectDialog({
           )}
         </div>
       </form>
-    </dialog>
+    </Dialog>
   );
 }
