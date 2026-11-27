@@ -31,6 +31,7 @@ it("reconstruye una rutina cifrada desde el diario y combina marcas de dos dispo
     ["routine:check:2026-11-20:review", true, "a"],
     ["routine:check:2026-11-20:plan", true, "b"],
     ["routine:check:2026-11-20:review", true, "b"],
+    ["routine:projectId", "project/1", "b"],
   ];
   const changes = await Promise.all(
     data.map(async ([field, value, deviceId], index) => {
@@ -66,8 +67,25 @@ it("reconstruye una rutina cifrada desde el diario y combina marcas de dos dispo
   const routine = readRoutine(key, legacyReplica);
   expect(routine).toEqual(readRoutine(key, reversed));
   if (!routine) throw new Error("No se reconstruyó la rutina.");
+  expect(routine.projectId).toBe("project/1");
   const progress = routineProgress(routine, Date.parse("2026-11-22T12:00Z"));
   expect(progress.cycle.checked).toEqual(new Set(["review", "plan"]));
   expect(progress.cycle.complete).toBe(true);
   expect(progress.streak).toBe(1);
+  const detached = readRoutine(
+    key,
+    mergeOp(legacyReplica, {
+      v: 1,
+      id: "detach",
+      entityId,
+      entity: "item",
+      deviceId: "b",
+      hlc: "2:0",
+      kind: "set",
+      field: "routine:projectId",
+      value: null,
+    }),
+  );
+  expect(detached?.projectId).toBeUndefined();
+  expect(detached?.checks).toEqual(routine.checks);
 });

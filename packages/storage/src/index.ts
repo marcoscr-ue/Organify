@@ -22,6 +22,7 @@ export type EventFutureChanges = EventChanges & {
 };
 
 export type EventSeriesChanges = Omit<EventChanges, "timing"> & {
+  projectId?: Id | null;
   timing?: {
     dayShift: number;
     allDay?: boolean;

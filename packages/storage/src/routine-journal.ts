@@ -15,6 +15,7 @@ export function readRoutine(
   { fields }: Replica,
 ): Routine | undefined {
   const name = fields["routine:name"]?.value;
+  const projectId = fields["routine:projectId"]?.value;
   const startsOn = fields["routine:start"]?.value;
   const timeZone = fields["routine:zone"]?.value;
   if (
@@ -35,6 +36,7 @@ export function readRoutine(
   const routine: Routine = {
     id: key.slice("item:".length),
     name,
+    ...(typeof projectId === "string" && { projectId }),
     startsOn,
     timeZone,
     schedules: {},

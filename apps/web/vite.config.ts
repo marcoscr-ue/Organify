@@ -53,6 +53,10 @@ function offlineShell(): Plugin {
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss(), offlineShell()],
+  server: {
+    // v0 assigns a new hostname when it recreates the preview sandbox.
+    allowedHosts: [".vercel.run"],
+  },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

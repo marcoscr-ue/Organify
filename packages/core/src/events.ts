@@ -35,6 +35,7 @@ export interface EventSchedule {
 
 export interface EventInput extends EventSchedule {
   title: string;
+  projectId?: string | null;
   notes: string;
   color: string | null;
   reminderMinutes?: number | null;
@@ -49,7 +50,9 @@ export interface CalendarEvent extends EventInput {
   exceptions?: Record<string, EventException>;
 }
 
-export type EventChanges = Partial<Omit<EventInput, "recurrence">>;
+export type EventChanges = Partial<
+  Omit<EventInput, "recurrence" | "projectId">
+>;
 
 export interface EventException extends EventChanges {
   cancelled?: true;
