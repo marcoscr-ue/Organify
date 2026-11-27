@@ -86,7 +86,12 @@ import {
 } from "./workspace-shortcuts";
 import { useCompactNavigation, WorkspaceSidebar } from "./workspace-sidebar";
 import { inboxes, useViewPreferences } from "./view-preferences";
-import { useSharedWorkspaces, WorkspacePicker } from "./shared-workspaces";
+import {
+  useSharedWorkspaces,
+  WorkspacePicker,
+  type WorkspacePickerHandle,
+} from "./shared-workspaces";
+import { HomeDashboard } from "./home-dashboard";
 import type { WorkspaceSession } from "./workspace-connection";
 
 const personalRepositories = createTaskRepositories();
@@ -670,14 +675,21 @@ export function App() {
     ? preferences.bindings
     : undefined;
   const compactNavigation = useCompactNavigation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigation = useRef<HTMLDialogElement>(null);
+  const workspacePicker = useRef<WorkspacePickerHandle>(null);
+  const settingsDialog = useRef<HTMLDialogElement>(null);
   const [openingView, setOpeningView] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(readDarkMode);
-  const [section, setSection] = useState<"tasks" | "routines" | "events">(
-    !floating && (startupView === "routines" || startupView === "events")
-      ? startupView
-      : "tasks",
+  const [section, setSection] = useState<
+    "home" | "tasks" | "routines" | "events"
+  >(
+    !floating && startupView === "home"
+      ? "home"
+      : !floating && (startupView === "routines" || startupView === "events")
+        ? startupView
+        : "tasks",
   );
   const [eventAction, setEventAction] = useState<EventDialogAction>();
   const showRoutines = section === "routines";
@@ -726,6 +738,7 @@ export function App() {
   );
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
+  const projectNameInput = useRef<HTMLInputElement>(null);
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [floatingCaptureOpen, setFloatingCaptureOpen] = useState(false);
@@ -898,6 +911,15 @@ export function App() {
     setSection("events");
     setProjectId(undefined);
     setSelectedId(undefined);
+  }
+
+  function openHome() {
+    navigation.current?.close();
+    setSection("home");
+    setProjectId(undefined);
+    setSelectedId(undefined);
+    setTaskSearch("");
+    setStatusFilter(undefined);
   }
 
   async function openTask(id: Id, edit = false, title?: string) {
@@ -1087,12 +1109,14 @@ export function App() {
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const activeProject = projectId ? projectById.get(projectId) : undefined;
   const heading =
-    activeProject?.name ??
-    (showEvents
-      ? "Eventos"
-      : showRoutines
-        ? "Rutinas"
-        : inboxes.find(({ id }) => id === activeInbox)?.label);
+    section === "home"
+      ? "Inicio"
+      : (activeProject?.name ??
+        (showEvents
+          ? "Eventos"
+          : showRoutines
+            ? "Rutinas"
+            : inboxes.find(({ id }) => id === activeInbox)?.label));
   const isToday = section === "tasks" && !projectId && activeInbox === "today";
   const openCount = visible.filter((item) => item.status !== "done").length;
   const allCommands: { label: string; run: () => void; disabled?: boolean }[] =
@@ -1119,6 +1143,7 @@ export function App() {
         label: `Ir a ${label}`,
         run: () => navigate(id),
       })),
+      { label: "Volver al inicio", run: openHome },
       { label: "Ir a Rutinas", run: openRoutines },
       { label: "Ir a Eventos", run: openEvents },
       ...projects.map(({ id, name }) => ({
@@ -1382,7 +1407,9 @@ export function App() {
   return (
     <div className="min-h-svh">
       <AutomaticReleaseNotes />
-      <div className="app-shell">
+      <div
+        className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+      >
         <header
           className={`app-topbar ${desktopWindow ? "app-topbar-desktop" : ""}`}
         >
@@ -1399,14 +1426,26 @@ export function App() {
                 <InterfaceIcon name="menu" className="size-5" />
               </button>
             )}
-            <div className="hidden min-w-0 items-center gap-2 text-xs text-muted md:flex md:flex-wrap">
-              <span className="hidden md:inline">
-                {space?.name ?? "Personal"}
-              </span>
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
+              <WorkspacePicker
+                ref={workspacePicker}
+                compact
+                session={workspaceSession}
+                spaces={sharedWorkspaces.spaces}
+                space={space}
+                error={sharedWorkspaces.error}
+                status={space && sharedWorkspaces.statuses[space.membershipId]}
+                disabled={capturing || creatingProject}
+                onSelect={(id) => {
+                  changeWorkspace(id);
+                  navigation.current?.close();
+                }}
+                refresh={sharedWorkspaces.refresh}
+              />
               <span aria-hidden="true" className="hidden md:inline">
                 /
               </span>
-              <span className="truncate text-sm font-semibold text-foreground md:text-xs md:break-all md:whitespace-normal">
+              <span className="hidden truncate text-sm font-semibold text-foreground md:inline md:text-xs md:break-all md:whitespace-normal">
                 {heading ?? "Tareas"}
               </span>
             </div>
@@ -1445,25 +1484,19 @@ export function App() {
               onWorkspaceSession={setWorkspaceSession}
               darkMode={darkMode}
               onThemeChange={changeTheme}
+              dialogRef={settingsDialog}
             />
           </div>
           {desktopWindow && <DesktopWindowControls />}
         </header>
-        <WorkspaceSidebar compact={compactNavigation} drawer={navigation}>
-          <WorkspacePicker
-            session={workspaceSession}
-            spaces={sharedWorkspaces.spaces}
-            space={space}
-            error={sharedWorkspaces.error}
-            status={space && sharedWorkspaces.statuses[space.membershipId]}
-            disabled={capturing || creatingProject}
-            onSelect={(id) => {
-              changeWorkspace(id);
-              navigation.current?.close();
-            }}
-            refresh={sharedWorkspaces.refresh}
-          />
+        <WorkspaceSidebar
+          compact={compactNavigation}
+          drawer={navigation}
+          onHome={openHome}
+          onCollapse={() => setSidebarCollapsed(true)}
+        >
           <div className="grid gap-2">
+            <h2 className="sidebar-label">Vistas principales</h2>
             <nav
               aria-label="Vistas"
               className="grid min-w-0 content-start gap-1"
@@ -1547,6 +1580,7 @@ export function App() {
             >
               <input
                 className="field min-w-0 flex-1"
+                ref={projectNameInput}
                 value={projectName}
                 onChange={(event) => {
                   setProjectName(event.target.value);
@@ -1572,371 +1606,425 @@ export function App() {
             )}
           </div>
         </WorkspaceSidebar>
+        {!compactNavigation && sidebarCollapsed && (
+          <button
+            type="button"
+            className="sidebar-reopen-button"
+            aria-label="Abrir barra lateral"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <InterfaceIcon name="chevron" className="size-4 -rotate-90" />
+          </button>
+        )}
 
         <main className="app-content">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
-              {heading ?? "Tareas"}
-            </h1>
-            <time
-              className="date-card"
-              dateTime={localStamp(today).slice(0, 10)}
-            >
-              <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
-                <InterfaceIcon name="calendar" />
-              </span>
-              {formatToday(today)}
-            </time>
-          </div>
-          {activeProject && (
-            <nav
-              aria-label="Contenido del proyecto"
-              className="mb-4 flex flex-wrap gap-2"
-            >
-              {(
-                [
-                  { id: "tasks", label: "Tareas" },
-                  { id: "routines", label: "Rutinas" },
-                  { id: "events", label: "Eventos" },
-                ] as const
-              ).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="topbar-button px-3 aria-[current=page]:bg-tint aria-[current=page]:text-accent-ink"
-                  aria-current={section === id ? "page" : undefined}
-                  onClick={() => {
-                    setSection(id);
-                    setSelectedId(undefined);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
+          {section === "home" && (
+            <HomeDashboard
+              spaces={sharedWorkspaces.spaces}
+              selectedSpaceId={selectedSpaceId}
+              projects={projects}
+              items={snapshot?.items ?? []}
+              events={snapshot?.events ?? []}
+              now={today}
+              loading={
+                Boolean(workspaceSession) &&
+                !sharedWorkspaces.spaces.length &&
+                !sharedWorkspaces.error
+              }
+              error={Boolean(sharedWorkspaces.error)}
+              widgets={viewPreferences.dashboardWidgets}
+              onWidgetsChange={(widgets) =>
+                viewPreferences.save({ dashboardWidgets: widgets })
+              }
+              canAddWorkspace={Boolean(workspaceSession)}
+              onSelectSpace={changeWorkspace}
+              onSelectProject={(id) => navigate("all", id)}
+              onAddProject={() => {
+                if (compactNavigation) navigation.current?.showModal();
+                projectNameInput.current?.focus();
+              }}
+              onAddWorkspace={() =>
+                workspaceSession
+                  ? workspacePicker.current?.open()
+                  : settingsDialog.current?.showModal()
+              }
+              onOpenPreferences={() => settingsDialog.current?.showModal()}
+              onOpenInbox={(id) => navigate(id)}
+              onOpenAgenda={openEvents}
+              onOpenCalendar={() => {
+                setSection("tasks");
+                setProjectId(undefined);
+                setInbox("all");
+                setLayout("calendar");
+                setSelectedId(undefined);
+              }}
+            />
           )}
-          {!space && snapshot && isToday && (
-            <section className="focus-card" aria-labelledby="focus-title">
-              <div className="relative z-10">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
-                  <InterfaceIcon name="sparkles" />
-                  Enfoque diario
+          <div hidden={section === "home"}>
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <h1 className="min-w-0 break-words text-[clamp(1.55rem,3vw,1.95rem)] font-semibold tracking-tight">
+                {heading ?? "Tareas"}
+              </h1>
+              <time
+                className="date-card"
+                dateTime={localStamp(today).slice(0, 10)}
+              >
+                <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
+                  <InterfaceIcon name="calendar" />
                 </span>
-                <h2
-                  id="focus-title"
-                  className="mt-2 text-2xl font-semibold tracking-tight"
-                >
-                  Tareas de hoy
-                </h2>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-muted">
-                  <progress
-                    className="focus-progress"
-                    aria-label="Progreso de hoy"
-                    value={doneToday}
-                    max={todayItems.length || 1}
-                  />
-                  <span>
-                    {doneToday} de {todayItems.length} completadas
+                {formatToday(today)}
+              </time>
+            </div>
+            {activeProject && (
+              <nav
+                aria-label="Contenido del proyecto"
+                className="mb-4 flex flex-wrap gap-2"
+              >
+                {(
+                  [
+                    { id: "tasks", label: "Tareas" },
+                    { id: "routines", label: "Rutinas" },
+                    { id: "events", label: "Eventos" },
+                  ] as const
+                ).map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="topbar-button px-3 aria-[current=page]:bg-tint aria-[current=page]:text-accent-ink"
+                    aria-current={section === id ? "page" : undefined}
+                    onClick={() => {
+                      setSection(id);
+                      setSelectedId(undefined);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
+            )}
+            {!space && snapshot && isToday && (
+              <section className="focus-card" aria-labelledby="focus-title">
+                <div className="relative z-10">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-ink">
+                    <InterfaceIcon name="sparkles" />
+                    Enfoque diario
                   </span>
+                  <h2
+                    id="focus-title"
+                    className="mt-2 text-2xl font-semibold tracking-tight"
+                  >
+                    Tareas de hoy
+                  </h2>
+                  <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs text-muted">
+                    <progress
+                      className="focus-progress"
+                      aria-label="Progreso de hoy"
+                      value={doneToday}
+                      max={todayItems.length || 1}
+                    />
+                    <span>
+                      {doneToday} de {todayItems.length} completadas
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="focus-art" aria-hidden="true">
-                <span className="focus-orbit" />
-                <span className="focus-orbit focus-orbit-outer" />
-                <span className="focus-symbol">
-                  <InterfaceIcon name="check" className="size-8" />
-                </span>
-                <InterfaceIcon
-                  name="sparkles"
-                  className="absolute top-8 left-7 size-4 text-primary"
+                <div className="focus-art" aria-hidden="true">
+                  <span className="focus-orbit" />
+                  <span className="focus-orbit focus-orbit-outer" />
+                  <span className="focus-symbol">
+                    <InterfaceIcon name="check" className="size-8" />
+                  </span>
+                  <InterfaceIcon
+                    name="sparkles"
+                    className="absolute top-8 left-7 size-4 text-primary"
+                  />
+                  <InterfaceIcon
+                    name="sparkles"
+                    className="absolute right-4 bottom-8 size-5 text-primary"
+                  />
+                </div>
+              </section>
+            )}
+            {showEvents &&
+              (snapshot ? (
+                <EventsAgenda
+                  key={projectId ?? "all"}
+                  events={scopedEvents}
+                  create={(date) => setEventAction({ date })}
+                  open={setEventAction}
+                  bindings={bindings}
                 />
-                <InterfaceIcon
-                  name="sparkles"
-                  className="absolute right-4 bottom-8 size-5 text-primary"
+              ) : (
+                <p className="text-sm text-muted" role="status">
+                  {readError
+                    ? "No se pudieron cargar los eventos."
+                    : "Cargando eventos."}
+                </p>
+              ))}
+            {showRoutines &&
+              (snapshot ? (
+                <RoutinesWorkspace
+                  key={projectId ?? "all"}
+                  mode="routines"
+                  routines={snapshot.routines.filter(
+                    (routine) => !projectId || routine.projectId === projectId,
+                  )}
+                  projects={projects}
+                  projectId={projectId}
+                  now={now}
+                  store={repositories.routines}
+                  openRoutines={openRoutines}
+                  bindings={bindings}
                 />
-              </div>
-            </section>
-          )}
-          {showEvents &&
-            (snapshot ? (
-              <EventsAgenda
-                key={projectId ?? "all"}
-                events={scopedEvents}
-                create={(date) => setEventAction({ date })}
-                open={setEventAction}
-                bindings={bindings}
-              />
-            ) : (
-              <p className="text-sm text-muted" role="status">
-                {readError
-                  ? "No se pudieron cargar los eventos."
-                  : "Cargando eventos."}
-              </p>
-            ))}
-          {showRoutines &&
-            (snapshot ? (
+              ) : (
+                <p className="text-sm text-muted" role="status">
+                  {readError
+                    ? "No se pudieron cargar las rutinas."
+                    : "Cargando rutinas…"}
+                </p>
+              ))}
+            {snapshot && isToday && (
               <RoutinesWorkspace
-                key={projectId ?? "all"}
-                mode="routines"
-                routines={snapshot.routines.filter(
-                  (routine) => !projectId || routine.projectId === projectId,
-                )}
+                mode="today"
+                routines={snapshot.routines}
                 projects={projects}
-                projectId={projectId}
                 now={now}
                 store={repositories.routines}
                 openRoutines={openRoutines}
                 bindings={bindings}
               />
-            ) : (
-              <p className="text-sm text-muted" role="status">
-                {readError
-                  ? "No se pudieron cargar las rutinas."
-                  : "Cargando rutinas…"}
-              </p>
-            ))}
-          {snapshot && isToday && (
-            <RoutinesWorkspace
-              mode="today"
-              routines={snapshot.routines}
-              projects={projects}
-              now={now}
-              store={repositories.routines}
-              openRoutines={openRoutines}
-              bindings={bindings}
-            />
-          )}
-          <section
-            hidden={section !== "tasks"}
-            className="task-panel"
-            aria-labelledby="task-panel-title"
-          >
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <h2 id="task-panel-title" className="font-semibold">
-                  {isToday ? "Tareas de hoy" : "Tareas"}
-                </h2>
-                {snapshot && (
-                  <span
-                    className="task-count"
-                    aria-label={`${openCount} tareas sin completar`}
-                  >
-                    {openCount}
-                  </span>
-                )}
-              </div>
-              <details className="relative">
-                <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
-                  <InterfaceIcon name="filter" />
-                  Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
-                </summary>
-                <div className="action-popover p-2">
-                  <select
-                    className="field"
-                    aria-label="Filtrar por estado"
-                    value={statusFilter ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setStatusFilter(
-                        value === "todo" ||
-                          value === "doing" ||
-                          value === "done"
-                          ? value
-                          : undefined,
-                      );
-                      closeDisclosure(event.currentTarget);
-                    }}
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="todo">Pendiente</option>
-                    <option value="doing">En curso</option>
-                    <option value="done">Hecha</option>
-                  </select>
+            )}
+            <section
+              hidden={section !== "tasks"}
+              className="task-panel"
+              aria-labelledby="task-panel-title"
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 id="task-panel-title" className="font-semibold">
+                    {isToday ? "Tareas de hoy" : "Tareas"}
+                  </h2>
+                  {snapshot && (
+                    <span
+                      className="task-count"
+                      aria-label={`${openCount} tareas sin completar`}
+                    >
+                      {openCount}
+                    </span>
+                  )}
                 </div>
-              </details>
-            </div>
-            {quickCapture}
-
-            <div className="my-3 flex flex-wrap items-center justify-between gap-2">
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label="Presentación de tareas"
-              >
-                {layouts.map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="nav-link flex items-center gap-1.5 px-2.5 text-xs"
-                    aria-pressed={layout === id}
-                    onClick={() => setLayout(id)}
-                  >
-                    <InterfaceIcon name={icon} />
-                    {label}
-                  </button>
-                ))}
+                <details className="relative">
+                  <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
+                    <InterfaceIcon name="filter" />
+                    Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
+                  </summary>
+                  <div className="action-popover p-2">
+                    <select
+                      className="field"
+                      aria-label="Filtrar por estado"
+                      value={statusFilter ?? ""}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setStatusFilter(
+                          value === "todo" ||
+                            value === "doing" ||
+                            value === "done"
+                            ? value
+                            : undefined,
+                        );
+                        closeDisclosure(event.currentTarget);
+                      }}
+                    >
+                      <option value="">Todos los estados</option>
+                      <option value="todo">Pendiente</option>
+                      <option value="doing">En curso</option>
+                      <option value="done">Hecha</option>
+                    </select>
+                  </div>
+                </details>
               </div>
-              {!space && desktopWindow && layout !== "list" && (
-                <FloatButton
-                  label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
-                  onClick={() => void floatLayout()}
-                  disabled={openingView}
-                />
-              )}
-              <label className="search-field w-52">
-                <InterfaceIcon name="search" className="size-4 shrink-0" />
-                <input
-                  className="min-w-0 flex-1 text-foreground outline-none placeholder:text-muted"
-                  type="search"
-                  placeholder="Buscar por título"
-                  aria-label="Buscar por título"
-                  value={taskSearch}
-                  onChange={(event) => setTaskSearch(event.target.value)}
-                />
-              </label>
-            </div>
-            {!selected && feedback}
-            {viewLoading}
+              {quickCapture}
 
-            <div className="min-w-0">
-              {boardOrCalendar}
-              {snapshot &&
-                layout === "list" &&
-                (visible.length ? (
-                  <ul {...swipeHandlers}>
-                    {visible.map((item) => {
-                      const project = item.projectId
-                        ? projectById.get(item.projectId)
-                        : undefined;
-                      const done = item.status === "done";
-                      const date =
-                        activeInbox === "in-progress"
-                          ? dateLabel(item, latestTaskStart(item, today))
-                          : dateLabel(item);
-                      return (
-                        <li
-                          key={item.id}
-                          data-task-shortcut={item.id}
-                          className={`task-row ${swipeEnabled ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            aria-label={`Completar tarea: ${item.title}`}
-                            aria-pressed={done}
-                            className="task-check"
-                            onClick={() =>
-                              move(item.id, done ? "todo" : "done")
-                            }
+              <div className="my-3 flex flex-wrap items-center justify-between gap-2">
+                <div
+                  className="flex flex-wrap gap-1"
+                  role="group"
+                  aria-label="Presentación de tareas"
+                >
+                  {layouts.map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="nav-link flex items-center gap-1.5 px-2.5 text-xs"
+                      aria-pressed={layout === id}
+                      onClick={() => setLayout(id)}
+                    >
+                      <InterfaceIcon name={icon} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {!space && desktopWindow && layout !== "list" && (
+                  <FloatButton
+                    label={`Abrir ${layout === "board" ? "Tablero" : "Calendario"} en una ventana independiente`}
+                    onClick={() => void floatLayout()}
+                    disabled={openingView}
+                  />
+                )}
+                <label className="search-field w-52">
+                  <InterfaceIcon name="search" className="size-4 shrink-0" />
+                  <input
+                    className="min-w-0 flex-1 text-foreground outline-none placeholder:text-muted"
+                    type="search"
+                    placeholder="Buscar por título"
+                    aria-label="Buscar por título"
+                    value={taskSearch}
+                    onChange={(event) => setTaskSearch(event.target.value)}
+                  />
+                </label>
+              </div>
+              {!selected && feedback}
+              {viewLoading}
+
+              <div className="min-w-0">
+                {boardOrCalendar}
+                {snapshot &&
+                  layout === "list" &&
+                  (visible.length ? (
+                    <ul {...swipeHandlers}>
+                      {visible.map((item) => {
+                        const project = item.projectId
+                          ? projectById.get(item.projectId)
+                          : undefined;
+                        const done = item.status === "done";
+                        const date =
+                          activeInbox === "in-progress"
+                            ? dateLabel(item, latestTaskStart(item, today))
+                            : dateLabel(item);
+                        return (
+                          <li
+                            key={item.id}
+                            data-task-shortcut={item.id}
+                            className={`task-row ${swipeEnabled ? "[touch-action:pan-y_pinch-zoom]" : ""}`}
                           >
-                            {done && (
-                              <InterfaceIcon
-                                name="check"
-                                className="size-3.5"
-                              />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            data-swipe-handle
-                            className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
-                            onClick={() => openTask(item.id)}
-                          >
-                            <span
-                              className={`block text-sm font-semibold wrap-anywhere ${done ? "text-muted line-through" : ""}`}
+                            <button
+                              type="button"
+                              aria-label={`Completar tarea: ${item.title}`}
+                              aria-pressed={done}
+                              className="task-check"
+                              onClick={() =>
+                                move(item.id, done ? "todo" : "done")
+                              }
                             >
-                              {item.title}
-                            </span>
-                            {project && (
-                              <span className="project-tag">
-                                <span
-                                  aria-hidden="true"
-                                  className="project-dot"
-                                  style={{ backgroundColor: project.color }}
+                              {done && (
+                                <InterfaceIcon
+                                  name="check"
+                                  className="size-3.5"
                                 />
-                                {project.name}
-                              </span>
-                            )}
-                          </button>
-                          {date && (
-                            <span className="text-xs text-muted">{date}</span>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <TaskStatusIcon item={item} now={now} />
-                            <StatusSelect
-                              value={item.status}
-                              onChange={(status) => move(item.id, status)}
-                            />
-                          </div>
-                          <details className="relative" name="task-actions">
-                            <summary
-                              className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
-                              aria-label={`Opciones de ${item.title}`}
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              data-swipe-handle
+                              className="min-w-0 flex-1 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-primary"
+                              onClick={() => openTask(item.id)}
                             >
-                              <InterfaceIcon
-                                name="more"
-                                className="size-5 text-foreground [stroke-width:3]"
+                              <span
+                                className={`block text-sm font-semibold wrap-anywhere ${done ? "text-muted line-through" : ""}`}
+                              >
+                                {item.title}
+                              </span>
+                              {project && (
+                                <span className="project-tag">
+                                  <span
+                                    aria-hidden="true"
+                                    className="project-dot"
+                                    style={{ backgroundColor: project.color }}
+                                  />
+                                  {project.name}
+                                </span>
+                              )}
+                            </button>
+                            {date && (
+                              <span className="text-xs text-muted">{date}</span>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <TaskStatusIcon item={item} now={now} />
+                              <StatusSelect
+                                value={item.status}
+                                onChange={(status) => move(item.id, status)}
                               />
-                            </summary>
-                            <div className="action-popover p-1">
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  openTask(item.id, true);
-                                }}
+                            </div>
+                            <details className="relative" name="task-actions">
+                              <summary
+                                className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
+                                aria-label={`Opciones de ${item.title}`}
                               >
-                                <InterfaceIcon name="edit" />
-                                Editar tarea
-                              </button>
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  setRenameId(item.id);
-                                }}
-                              >
-                                <InterfaceIcon name="edit" />
-                                Renombrar tarea
-                              </button>
-                              {!space && desktopWindow && (
+                                <InterfaceIcon
+                                  name="more"
+                                  className="size-5 text-foreground [stroke-width:3]"
+                                />
+                              </summary>
+                              <div className="action-popover p-1">
                                 <button
                                   type="button"
                                   className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
                                   onClick={(event) => {
                                     closeDisclosure(event.currentTarget);
-                                    void floatTask(item);
+                                    openTask(item.id, true);
                                   }}
                                 >
-                                  <InterfaceIcon name="popout" />
-                                  Abrir en ventana
+                                  <InterfaceIcon name="edit" />
+                                  Editar tarea
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
-                                onClick={(event) => {
-                                  closeDisclosure(event.currentTarget);
-                                  setDeletion({ item });
-                                }}
-                              >
-                                <InterfaceIcon name="trash" />
-                                Eliminar tarea
-                              </button>
-                            </div>
-                          </details>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="border-t border-line p-6 text-center text-sm text-muted">
-                    No hay tareas en esta vista.
-                  </p>
-                ))}
-            </div>
-          </section>
+                                <button
+                                  type="button"
+                                  className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                  onClick={(event) => {
+                                    closeDisclosure(event.currentTarget);
+                                    setRenameId(item.id);
+                                  }}
+                                >
+                                  <InterfaceIcon name="edit" />
+                                  Renombrar tarea
+                                </button>
+                                {!space && desktopWindow && (
+                                  <button
+                                    type="button"
+                                    className="nav-link flex w-full items-center gap-2 whitespace-nowrap"
+                                    onClick={(event) => {
+                                      closeDisclosure(event.currentTarget);
+                                      void floatTask(item);
+                                    }}
+                                  >
+                                    <InterfaceIcon name="popout" />
+                                    Abrir en ventana
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="nav-link flex w-full items-center gap-2 whitespace-nowrap text-danger"
+                                  onClick={(event) => {
+                                    closeDisclosure(event.currentTarget);
+                                    setDeletion({ item });
+                                  }}
+                                >
+                                  <InterfaceIcon name="trash" />
+                                  Eliminar tarea
+                                </button>
+                              </div>
+                            </details>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="border-t border-line p-6 text-center text-sm text-muted">
+                      No hay tareas en esta vista.
+                    </p>
+                  ))}
+              </div>
+            </section>
+          </div>
         </main>
       </div>
 

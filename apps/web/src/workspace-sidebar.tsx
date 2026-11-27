@@ -22,21 +22,32 @@ export function WorkspaceSidebar({
   compact,
   drawer,
   children,
+  onHome,
+  onCollapse,
 }: {
   compact: boolean;
   drawer: RefObject<HTMLDialogElement | null>;
   children: ReactNode;
+  onHome: () => void;
+  onCollapse: () => void;
 }) {
   const sidebar = (
     <aside className="app-sidebar">
       <div className="sidebar-header">
-        <img
-          src={sidebarLogo}
-          alt="Organify"
-          width={2172}
-          height={724}
-          className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
-        />
+        <button
+          type="button"
+          onClick={onHome}
+          aria-label="Ir a Inicio"
+          className="min-w-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent md:w-full"
+        >
+          <img
+            src={sidebarLogo}
+            alt="Organify"
+            width={2172}
+            height={724}
+            className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
+          />
+        </button>
         {compact && (
           <button
             type="button"
@@ -56,7 +67,22 @@ export function WorkspaceSidebar({
     </aside>
   );
 
-  if (!compact) return sidebar;
+  if (!compact) {
+    return (
+      <>
+        {sidebar}
+        <button
+          type="button"
+          aria-label="Contraer barra lateral"
+          title="Contraer barra lateral"
+          className="sidebar-collapse-toggle"
+          onClick={onCollapse}
+        >
+          <InterfaceIcon name="chevron" className="size-4 rotate-90" />
+        </button>
+      </>
+    );
+  }
 
   return (
     <dialog

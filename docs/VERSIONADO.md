@@ -6,6 +6,8 @@ Los parches exclusivos de Windows pueden avanzar la versión técnica de escrito
 
 ## Cambios de sincronización
 
+- La 0.17.0 incorpora Inicio y su panel personalizable. Las preferencias del panel se guardan en el dispositivo. Los clientes anteriores y nuevos pueden seguir intercambiando las operaciones guardadas y las nuevas con el protocolo 1, los esquemas de IndexedDB y las RPC existentes. Se aplican las mismas migraciones de Supabase que en la 0.16.1. El APK de distribución usa `versionName` 0.17.0 y `versionCode` 17000.
+
 - La 0.16.1 habilita las operaciones existentes de rutinas y eventos en el historial de los espacios compartidos. El proyecto opcional se sincroniza en `routine:projectId` o `event:projectId`, con `null` para quitar el vínculo. El campo del evento se guarda en la raíz y se aplica a toda la serie, incluidos los tramos existentes y futuros. Los clientes 0.16.0 conservan las operaciones compartidas al sincronizar y las muestran después de actualizar. Las versiones anteriores conservan los vínculos del historial personal y pueden seguir editando los campos que conocen. Se mantienen el protocolo 1, los esquemas de IndexedDB y las RPC. Los espacios compartidos usan la misma migración de Supabase que la 0.16.0. El APK de distribución usa `versionName` 0.16.1 y `versionCode` 16001.
 
 - La 0.16.0 presenta los datos existentes dentro del espacio Personal. Mantiene su base local, las operaciones del protocolo 1, la clave de cuenta y las RPC anteriores. Los clientes 0.15.x y 0.16.0 pueden seguir editando y sincronizando los mismos datos personales, incluidas las operaciones pendientes antes de actualizar.
