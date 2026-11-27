@@ -48,17 +48,6 @@ export function WorkspaceSidebar({
             className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
           />
         </button>
-        {!compact && (
-          <button
-            type="button"
-            aria-label="Contraer barra lateral"
-            title="Contraer barra lateral"
-            className="sidebar-collapse-toggle"
-            onClick={onCollapse}
-          >
-            <InterfaceIcon name="chevron" className="size-4 rotate-90" />
-          </button>
-        )}
         {compact && (
           <button
             type="button"
@@ -78,7 +67,22 @@ export function WorkspaceSidebar({
     </aside>
   );
 
-  if (!compact) return sidebar;
+  if (!compact) {
+    return (
+      <>
+        {sidebar}
+        <button
+          type="button"
+          aria-label="Contraer barra lateral"
+          title="Contraer barra lateral"
+          className="sidebar-collapse-toggle"
+          onClick={onCollapse}
+        >
+          <InterfaceIcon name="chevron" className="size-4 rotate-90" />
+        </button>
+      </>
+    );
+  }
 
   return (
     <dialog

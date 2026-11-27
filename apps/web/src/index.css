@@ -196,7 +196,7 @@ dialog::backdrop {
   }
 
   .sidebar-reopen-button {
-    @apply fixed left-0 top-1/2 z-20 size-9 -translate-y-1/2 rounded-r-lg border-l-0;
+    @apply fixed left-0 top-1/2 z-20 h-12 w-5 -translate-y-1/2 rounded-r-lg border-l-0;
   }
 
   .app-topbar {
@@ -228,7 +228,7 @@ dialog::backdrop {
   }
 
   .app-content {
-    @apply mx-auto w-full max-w-[1080px] min-w-0 px-4 py-6 sm:px-6 lg:px-[42px] lg:py-9;
+    @apply w-full min-w-0 px-4 py-6 sm:px-6 lg:px-20 lg:py-9;
   }
 
   @media (width < 48rem) {
@@ -293,8 +293,9 @@ dialog::backdrop {
 
   @media (min-width: 48rem) {
     .app-shell {
+      --sidebar-width: 13rem;
       display: grid;
-      grid-template-columns: 13rem minmax(0, 1fr);
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
       grid-template-rows: 73px 1fr;
       min-height: 100svh;
     }
@@ -303,20 +304,14 @@ dialog::backdrop {
       grid-template-columns: 0 minmax(0, 1fr);
     }
 
-    .app-shell.sidebar-collapsed .app-sidebar {
+    .app-shell.sidebar-collapsed .app-sidebar,
+    .app-shell.sidebar-collapsed .sidebar-collapse-toggle {
       display: none;
     }
 
-    .sidebar-header {
-      position: relative;
-    }
-
-    .sidebar-logo {
-      max-width: calc(100% - 2.5rem);
-    }
-
     .sidebar-collapse-toggle {
-      @apply absolute top-0 right-0 grid size-8 rounded-md;
+      @apply fixed top-1/2 z-20 grid h-12 w-5 -translate-y-1/2 rounded-r-lg border-l-0;
+      left: var(--sidebar-width);
     }
 
     .workspace-picker-select {
@@ -342,7 +337,7 @@ dialog::backdrop {
 
   @media (min-width: 64rem) {
     .app-shell {
-      grid-template-columns: 244px minmax(0, 1fr);
+      --sidebar-width: 244px;
     }
   }
 
@@ -473,7 +468,9 @@ dialog::backdrop {
 
   .dashboard-card[aria-pressed="true"] {
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px var(--dashboard-selected), 0 8px 24px rgb(70 72 212 / 9%);
+    box-shadow:
+      0 0 0 2px var(--dashboard-selected),
+      0 8px 24px rgb(70 72 212 / 9%);
   }
 
   .dashboard-cover {

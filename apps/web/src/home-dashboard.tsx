@@ -70,7 +70,7 @@ function WorkspaceCard({
         {selected && (
           <span className="dashboard-selected-badge" aria-hidden="true">
             <InterfaceIcon name="check" />
-            Seleccionado
+            Actual
           </span>
         )}
       </span>
@@ -424,7 +424,6 @@ export function HomeDashboard({
       >
         <div className="dashboard-section-heading">
           <div>
-            <p className="dashboard-eyebrow">DE ESTE ESPACIO</p>
             <h2 id="projects-section-title">Proyectos</h2>
           </div>
           <div className="dashboard-actions">

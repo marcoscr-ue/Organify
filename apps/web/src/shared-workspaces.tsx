@@ -283,16 +283,16 @@ export const WorkspacePicker = forwardRef<
           ))}
         </select>
       </label>
-      {session && (
+      {session && !compact && (
         <button
           type="button"
-          className={compact ? "workspace-picker-manage topbar-button" : "nav-link text-left"}
+          className="nav-link text-left"
           onClick={open}
           disabled={disabled}
           aria-label="Gestionar espacios compartidos"
           title="Gestionar espacios compartidos"
         >
-          {compact ? "Espacios" : "Espacios compartidos"}
+          Espacios compartidos
         </button>
       )}
       {space && (
