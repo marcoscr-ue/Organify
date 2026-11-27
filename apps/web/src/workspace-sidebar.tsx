@@ -22,21 +22,30 @@ export function WorkspaceSidebar({
   compact,
   drawer,
   children,
+  onHome,
 }: {
   compact: boolean;
   drawer: RefObject<HTMLDialogElement | null>;
   children: ReactNode;
+  onHome: () => void;
 }) {
   const sidebar = (
     <aside className="app-sidebar">
       <div className="sidebar-header">
-        <img
-          src={sidebarLogo}
-          alt="Organify"
-          width={2172}
-          height={724}
-          className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
-        />
+        <button
+          type="button"
+          onClick={onHome}
+          aria-label="Ir a Inicio"
+          className="min-w-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent md:w-full"
+        >
+          <img
+            src={sidebarLogo}
+            alt="Organify"
+            width={2172}
+            height={724}
+            className="sidebar-logo h-auto w-40 object-contain md:mb-3 md:w-full md:max-w-53"
+          />
+        </button>
         {compact && (
           <button
             type="button"

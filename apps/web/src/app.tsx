@@ -735,6 +735,7 @@ export function App() {
   );
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
+  const projectNameInput = useRef<HTMLInputElement>(null);
   const [projectName, setProjectName] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [floatingCaptureOpen, setFloatingCaptureOpen] = useState(false);
@@ -1471,7 +1472,11 @@ export function App() {
           </div>
           {desktopWindow && <DesktopWindowControls />}
         </header>
-        <WorkspaceSidebar compact={compactNavigation} drawer={navigation}>
+        <WorkspaceSidebar
+          compact={compactNavigation}
+          drawer={navigation}
+          onHome={openHome}
+        >
           <WorkspacePicker
             ref={workspacePicker}
             session={workspaceSession}
@@ -1491,14 +1496,6 @@ export function App() {
               aria-label="Vistas"
               className="grid min-w-0 content-start gap-1"
             >
-              <button
-                type="button"
-                className="nav-link flex items-center gap-2.5"
-                aria-current={section === "home" ? "page" : undefined}
-                onClick={openHome}
-              >
-                <InterfaceIcon name="home" /> Inicio
-              </button>
               <details
                 className="task-nav-group"
                 open={tasksOpen}
@@ -1578,6 +1575,7 @@ export function App() {
             >
               <input
                 className="field min-w-0 flex-1"
+                ref={projectNameInput}
                 value={projectName}
                 onChange={(event) => {
                   setProjectName(event.target.value);
@@ -1626,6 +1624,10 @@ export function App() {
               canAddWorkspace={Boolean(workspaceSession)}
               onSelectSpace={changeWorkspace}
               onSelectProject={(id) => navigate("all", id)}
+              onAddProject={() => {
+                if (compactNavigation) navigation.current?.showModal();
+                projectNameInput.current?.focus();
+              }}
               onAddWorkspace={() =>
                 workspaceSession
                   ? workspacePicker.current?.open()

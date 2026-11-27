@@ -69,6 +69,24 @@ type Release = {
 
 const releases: Release[] = [
   {
+    version: "0.17.0",
+    date: "2026-11-27",
+    changes: [
+      introduced(
+        "Explora tus espacios de trabajo y los proyectos del espacio activo desde la nueva pantalla de Inicio.",
+      ),
+      introduced(
+        "Personaliza tu panel con tareas de hoy, tareas en curso, agenda y calendario.",
+      ),
+      updated(
+        "Vuelve a Inicio pulsando el logo de Organify y elige tu vista de arranque en Preferencias.",
+      ),
+      improved(
+        "Accede a Preferencias y a las acciones para añadir espacios y proyectos desde las cabeceras de Inicio.",
+      ),
+    ],
+  },
+  {
     version: "0.16.1",
     date: "2026-11-25",
     changes: [

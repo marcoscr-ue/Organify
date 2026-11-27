@@ -310,6 +310,7 @@ export function HomeDashboard({
   onSelectSpace,
   onSelectProject,
   onAddWorkspace,
+  onAddProject,
   onOpenPreferences,
   onOpenInbox,
   onOpenAgenda,
@@ -329,6 +330,7 @@ export function HomeDashboard({
   onSelectSpace: (id?: string) => void;
   onSelectProject: (id: string) => void;
   onAddWorkspace: () => void;
+  onAddProject: () => void;
   onOpenPreferences: () => void;
   onOpenInbox: (inbox: "today" | "in-progress") => void;
   onOpenAgenda: () => void;
@@ -343,22 +345,6 @@ export function HomeDashboard({
 
   return (
     <div className="dashboard-page">
-      <header className="dashboard-intro">
-        <div>
-          <p className="dashboard-eyebrow">ORGANIZA A TU MANERA</p>
-          <h1>Inicio</h1>
-          <p className="dashboard-intro-copy">
-            Todo lo importante, organizado en un mismo lugar.
-          </p>
-        </div>
-        <time className="date-card" dateTime={now.toISOString().slice(0, 10)}>
-          <span className="grid size-7 place-items-center rounded-md bg-tint text-accent-ink">
-            <InterfaceIcon name="calendar" />
-          </span>
-          {monthFormat.format(now)}
-        </time>
-      </header>
-
       <section
         className="dashboard-section"
         aria-labelledby="workspace-section-title"
@@ -374,7 +360,7 @@ export function HomeDashboard({
               className="gap-2 border border-line bg-paper text-foreground hover:bg-panel"
               onClick={onOpenPreferences}
             >
-              <InterfaceIcon name="settings" data-icon="inline-start" />
+              <InterfaceIcon name="filter" data-icon="inline-start" />
               Preferencias
             </Button>
             <Button
@@ -449,9 +435,24 @@ export function HomeDashboard({
             <p className="dashboard-eyebrow">DE ESTE ESPACIO</p>
             <h2 id="projects-section-title">Proyectos</h2>
           </div>
-          <span className="dashboard-section-meta">
-            {projects.length} {projects.length === 1 ? "proyecto" : "proyectos"}
-          </span>
+          <div className="dashboard-actions">
+            <span className="dashboard-section-meta">
+              {projects.length}{" "}
+              {projects.length === 1 ? "proyecto" : "proyectos"}
+            </span>
+            <Button
+              type="button"
+              className="gap-2 border border-line bg-paper text-foreground hover:bg-panel"
+              onClick={onOpenPreferences}
+            >
+              <InterfaceIcon name="filter" data-icon="inline-start" />
+              Preferencias
+            </Button>
+            <Button type="button" className="gap-2" onClick={onAddProject}>
+              <InterfaceIcon name="plus" data-icon="inline-start" />
+              Añadir proyecto
+            </Button>
+          </div>
         </div>
         {projects.length ? (
           <div
