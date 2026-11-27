@@ -1,34 +1,65 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "./routines.css";
 
 :root {
   color-scheme: light;
-  --background: #f7f7fa;
-  --foreground: #19192a;
-  --primary: #7047eb;
+  --background: #f6f8ff;
+  --foreground: #10243d;
+  --primary: #4648d4;
   --primary-foreground: #fff;
   --paper: #fff;
-  --panel: #f7f5fb;
-  --line: #ecebf2;
-  --control-line: #dcd8e7;
-  --muted: #706c7e;
-  --tint: #f1edfc;
-  --accent-ink: #5e3fbe;
-  --danger: #b53349;
-  --danger-button: #b53349;
-  --success: #15803d;
-  --success-tint: #ecfdf5;
-  --topbar: #fafafd;
-  --focus-line: #e8e0fb;
-  --focus-background: linear-gradient(105deg, #f2eefc, #f9f7ff 59%, #f4f0fc);
-  --calendar-today: #f7f3ff;
-  --calendar-event: #eee9fb;
-  --calendar-event-line: #aa91ed;
-  --calendar-event-text: #4e358d;
-  --workspace-cover: #f0eafb;
-  --project-cover: #f4eee6;
-  --dashboard-selected: #e8dfff;
-  --radius: 0.75rem;
+  --panel: #eff4ff;
+  --line: #e2e9f7;
+  --control-line: #c7d2e6;
+  --muted: #5f6e83;
+  --tint: #e8e8ff;
+  --accent-ink: #383ab8;
+  --danger: #b42330;
+  --danger-button: #b42330;
+  --success: #00784e;
+  --success-tint: #dcf8eb;
+  --topbar: #f8f9ff;
+  --focus-line: #dedfff;
+  --focus-background: linear-gradient(105deg, #eaeaff, #f8f8ff 59%, #e8f0ff);
+  --calendar-today: #e8e8ff;
+  --calendar-event: #e9ddff;
+  --calendar-event-line: #a98be9;
+  --calendar-event-text: #4d2c9e;
+  --workspace-cover: #e8edff;
+  --project-cover: #e9f2ee;
+  --dashboard-selected: #c0c1ff;
+  --radius: 1rem;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #101827;
+  --foreground: #edf2ff;
+  --primary: #a8a9ff;
+  --primary-foreground: #17183d;
+  --paper: #182337;
+  --panel: #202f47;
+  --line: #2d3d57;
+  --control-line: #536581;
+  --muted: #aebbd0;
+  --tint: #30335e;
+  --accent-ink: #c0c1ff;
+  --danger: #ff9a9e;
+  --danger-button: #8f2834;
+  --success: #6fe3ae;
+  --success-tint: #183c36;
+  --topbar: #131e30;
+  --focus-line: #393d71;
+  --focus-background: linear-gradient(105deg, #292b52, #1d2a41 59%, #243855);
+  --calendar-today: #30335e;
+  --calendar-event: #392c5b;
+  --calendar-event-line: #9d82dc;
+  --calendar-event-text: #e6daff;
+  --workspace-cover: #24324b;
+  --project-cover: #233a39;
+  --dashboard-selected: #47365f;
+  --radius: 1rem;
 }
 
 :root[data-theme="dark"] {
@@ -84,7 +115,7 @@
 
 body {
   @apply bg-background text-foreground;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   /* viewport-fit=cover: evita la muesca y el indicador de inicio en iOS. */
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
     env(safe-area-inset-left);
@@ -128,6 +159,7 @@ dialog::backdrop {
 
   .app-sidebar {
     @apply flex min-w-0 flex-col gap-6 bg-paper p-4;
+    box-shadow: 1px 0 0 var(--line);
   }
 
   .sidebar-sections {
@@ -144,7 +176,8 @@ dialog::backdrop {
 
   .app-topbar {
     @apply flex min-w-0 items-center justify-between gap-2 border-b border-line px-4 py-3 sm:px-6 lg:px-[42px];
-    background: var(--topbar);
+    background: color-mix(in srgb, var(--topbar) 92%, transparent);
+    backdrop-filter: blur(16px);
   }
 
   @media (width < 48rem) {
@@ -328,7 +361,7 @@ dialog::backdrop {
 
 @layer components {
   .dashboard-page {
-    @apply grid gap-8;
+    @apply grid gap-10;
   }
 
   .dashboard-intro {
@@ -336,7 +369,7 @@ dialog::backdrop {
   }
 
   .dashboard-intro h1 {
-    @apply mt-1 text-3xl font-semibold tracking-tight;
+    @apply mt-1 text-3xl font-bold tracking-tight;
   }
 
   .dashboard-intro-copy {
@@ -356,7 +389,7 @@ dialog::backdrop {
   }
 
   .dashboard-section-heading h2 {
-    @apply mt-1 text-xl font-semibold tracking-tight;
+    @apply mt-1 text-2xl font-bold tracking-tight;
   }
 
   .dashboard-actions {
@@ -375,12 +408,12 @@ dialog::backdrop {
   }
 
   .dashboard-card {
-    @apply flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-paper text-left shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+    @apply flex min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-paper text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
   }
 
   .dashboard-card[aria-pressed="true"] {
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px var(--dashboard-selected);
+    box-shadow: 0 0 0 2px var(--dashboard-selected), 0 8px 24px rgb(70 72 212 / 9%);
   }
 
   .dashboard-cover {
