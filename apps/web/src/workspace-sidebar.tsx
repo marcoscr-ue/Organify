@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import { useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import sidebarLogo from "../../../organify_logo_sidebar_beta.png";
 import { ReleaseNotes } from "./app-overlays";
@@ -85,16 +86,13 @@ export function WorkspaceSidebar({
   }
 
   return (
-    <dialog
+    <Dialog
       id="mobile-navigation"
       ref={drawer}
       aria-label="Menú de navegación"
       className="mobile-navigation"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) event.currentTarget.close();
-      }}
     >
       {sidebar}
-    </dialog>
+    </Dialog>
   );
 }

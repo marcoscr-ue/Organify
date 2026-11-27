@@ -144,7 +144,7 @@ export interface TaskRepositories {
     removeMany(ids: readonly Id[]): Promise<void>;
   };
   projects: {
-    create(name: string): Promise<Id>;
+    create(name: string, color?: string): Promise<Id>;
     update(id: Id, changes: ProjectChanges): Promise<void>;
   };
 }

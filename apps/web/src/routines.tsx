@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import {
   useId,
   useLayoutEffect,
@@ -132,16 +133,13 @@ function RoutineDialog({
     return () => element?.close();
   }, []);
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       aria-labelledby={titleId}
       className="routine-dialog"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) close();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) close();
       }}
     >
       <div className="routine-dialog-content">
@@ -161,7 +159,7 @@ function RoutineDialog({
         </div>
         {children}
       </div>
-    </dialog>
+    </Dialog>
   );
 }
 

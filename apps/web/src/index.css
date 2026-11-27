@@ -196,7 +196,16 @@ dialog::backdrop {
   }
 
   .sidebar-reopen-button {
-    @apply fixed left-0 top-1/2 z-20 h-12 w-5 -translate-y-1/2 rounded-r-lg border-l-0;
+    @apply fixed left-0 top-0 z-20 grid h-dvh w-5 place-items-center border-0 bg-transparent shadow-none;
+  }
+
+  .sidebar-reopen-button::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-16 w-5 -translate-y-1/2 rounded-r-lg border border-l-0 border-line bg-paper shadow-sm;
+  }
+
+  .sidebar-reopen-button svg {
+    position: relative;
   }
 
   .app-topbar {

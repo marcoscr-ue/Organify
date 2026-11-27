@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import {
   useEffect,
   useId,
@@ -77,6 +78,9 @@ const releases: Release[] = [
       ),
       introduced(
         "Personaliza tu panel con tareas de hoy, tareas en curso, agenda y calendario.",
+      ),
+      updated(
+        "Se han realizado cambios en la interfaz para mejorar la experiencia del usuario.",
       ),
       updated(
         "Vuelve a Inicio pulsando el logo de Organify y elige tu vista de arranque en Preferencias.",
@@ -483,7 +487,7 @@ export function DeleteConfirmation({
   }
 
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       role="alertdialog"
       aria-labelledby={titleId}
@@ -530,7 +534,7 @@ export function DeleteConfirmation({
           {busy ? "Borrando…" : confirmLabel}
         </Button>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
 
@@ -558,7 +562,7 @@ export function RenameDialog({
   }, []);
 
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       aria-labelledby={titleId}
       className={`${dialogClass} w-[min(28rem,calc(100%-2rem))]`}
@@ -619,7 +623,7 @@ export function RenameDialog({
           Guardar
         </Button>
       </form>
-    </dialog>
+    </Dialog>
   );
 }
 
@@ -657,7 +661,7 @@ function AppDialog({
       >
         {trigger}
       </button>
-      <dialog
+      <Dialog
         ref={dialog}
         aria-labelledby={titleId}
         className={`${dialogClass} ${wide ? "w-[min(60rem,calc(100%-1.5rem))]" : "w-[min(32rem,calc(100%-2rem))]"}`}
@@ -669,7 +673,7 @@ function AppDialog({
           <CloseDialogButton onClick={() => dialog.current?.close()} />
         </div>
         <div className={wide ? "" : "p-5"}>{children}</div>
-      </dialog>
+      </Dialog>
     </>
   );
 }
@@ -770,7 +774,7 @@ export function AutomaticReleaseNotes() {
 
   if (!release) return null;
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       aria-labelledby={headingId}
       onClose={acknowledge}
@@ -799,7 +803,7 @@ export function AutomaticReleaseNotes() {
           Cerrar
         </Button>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
 

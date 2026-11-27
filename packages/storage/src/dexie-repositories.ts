@@ -767,8 +767,11 @@ export function createTaskRepositories(
       removeMany: removeItems,
     },
     projects: {
-      create(input) {
+      create(input, color) {
         const name = requiredText(input, "Escribe un nombre para el proyecto.");
+        if (color !== undefined && !isProjectColor(color)) {
+          throw new Error("Elige un color válido para el proyecto.");
+        }
         return db.transaction("rw", writeTables, async () => {
           const last = await db.projects.orderBy("order").last();
           const id = v7();
@@ -776,6 +779,7 @@ export function createTaskRepositories(
             id,
             workspaceId: await workspaceId(),
             name,
+            ...(color !== undefined ? { color: color.toLowerCase() } : {}),
             order: generateKeyBetween(last?.order ?? null, null),
           };
           await db.projects.add(project);

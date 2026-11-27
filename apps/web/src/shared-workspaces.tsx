@@ -1,3 +1,4 @@
+import { Dialog } from "@/components/ui/dialog";
 import {
   forwardRef,
   useCallback,
@@ -305,7 +306,7 @@ export const WorkspacePicker = forwardRef<
               : "Sincronizando espacio."}
         </p>
       )}
-      <dialog
+      <Dialog
         ref={dialog}
         aria-label="Espacios compartidos"
         className="m-auto w-[min(30rem,calc(100%-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-line bg-paper p-5 text-foreground shadow-xl backdrop:bg-black/35"
@@ -486,7 +487,7 @@ export const WorkspacePicker = forwardRef<
             {(message || error) && <p role="status">{message || error}</p>}
           </div>
         )}
-      </dialog>
+      </Dialog>
     </div>
   );
 });

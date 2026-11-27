@@ -1,3 +1,5 @@
+import { Dropdown } from "@/components/ui/dropdown";
+import { Children, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   eventOccurrences,
   matchesInbox,
@@ -11,6 +13,94 @@ import { InterfaceIcon } from "./interface-icon";
 import { calendarZone } from "./events";
 import type { ConnectedWorkspace } from "./workspace-connection";
 import type { DashboardWidgetId } from "./view-preferences";
+
+function SectionPreferences({
+  label,
+  rows,
+  onChange,
+}: {
+  label: string;
+  rows: number;
+  onChange: (rows: number) => void;
+}) {
+  return (
+    <Dropdown className="dashboard-customizer">
+      <summary
+        className="topbar-button gap-2 px-3"
+        aria-label={`Preferencias de ${label}`}
+      >
+        <InterfaceIcon name="filter" />
+        Preferencias
+      </summary>
+      <div className="dashboard-customizer-popover">
+        <label className="flex-wrap justify-between">
+          Filas visibles
+          <select
+            className="field"
+            aria-label={`Filas visibles de ${label}`}
+            value={rows}
+            onChange={(event) => onChange(Number(event.target.value))}
+          >
+            <option value={0}>Sin límite</option>
+            {[1, 2, 3, 4, 5].map((count) => (
+              <option key={count} value={count}>
+                {count} {count === 1 ? "fila" : "filas"}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </Dropdown>
+  );
+}
+
+function LimitedCardGrid({
+  rows,
+  label,
+  children,
+}: {
+  rows: number;
+  label: string;
+  children: ReactNode;
+}) {
+  const grid = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(1);
+  const [expanded, setExpanded] = useState(false);
+  const cards = Children.toArray(children);
+  useEffect(() => {
+    const element = grid.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      const tracks = getComputedStyle(element).gridTemplateColumns.split(" ");
+      setColumns(Math.max(1, tracks.length));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const limit = rows ? rows * columns : cards.length;
+  return (
+    <>
+      <div
+        ref={grid}
+        className="dashboard-card-grid"
+        role="list"
+        aria-label={label}
+      >
+        {expanded ? cards : cards.slice(0, limit)}
+      </div>
+      {cards.length > limit && (
+        <button
+          type="button"
+          className="dashboard-widget-link mt-3"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Mostrar menos" : `Ver todos (${cards.length})`}
+        </button>
+      )}
+    </>
+  );
+}
 
 const widgetOptions: { id: DashboardWidgetId; label: string }[] = [
   { id: "today", label: "Tareas para hoy" },
@@ -303,7 +393,10 @@ export function HomeDashboard({
   onSelectProject,
   onAddWorkspace,
   onAddProject,
-  onOpenPreferences,
+  workspaceRows,
+  projectRows,
+  onWorkspaceRowsChange,
+  onProjectRowsChange,
   onOpenInbox,
   onOpenAgenda,
   onOpenCalendar,
@@ -323,7 +416,10 @@ export function HomeDashboard({
   onSelectProject: (id: string) => void;
   onAddWorkspace: () => void;
   onAddProject: () => void;
-  onOpenPreferences: () => void;
+  workspaceRows: number;
+  projectRows: number;
+  onWorkspaceRowsChange: (rows: number) => void;
+  onProjectRowsChange: (rows: number) => void;
   onOpenInbox: (inbox: "today" | "in-progress") => void;
   onOpenAgenda: () => void;
   onOpenCalendar: () => void;
@@ -347,14 +443,11 @@ export function HomeDashboard({
             <h2 id="workspace-section-title">Espacios de trabajo</h2>
           </div>
           <div className="dashboard-actions">
-            <Button
-              type="button"
-              className="gap-2 border border-line bg-paper text-foreground hover:bg-panel"
-              onClick={onOpenPreferences}
-            >
-              <InterfaceIcon name="filter" data-icon="inline-start" />
-              Preferencias
-            </Button>
+            <SectionPreferences
+              label="Espacios de trabajo"
+              rows={workspaceRows}
+              onChange={onWorkspaceRowsChange}
+            />
             <Button
               type="button"
               className="gap-2"
@@ -370,10 +463,10 @@ export function HomeDashboard({
             </Button>
           </div>
         </div>
-        <div
-          className="dashboard-card-grid"
-          role="list"
-          aria-label="Tus espacios de trabajo"
+        <LimitedCardGrid
+          key={`spaces-${workspaceRows}`}
+          rows={workspaceRows}
+          label="Tus espacios de trabajo"
         >
           <div role="listitem">
             <WorkspaceCard
@@ -405,17 +498,17 @@ export function HomeDashboard({
               />
             </div>
           ))}
-          {loading && (
-            <p className="dashboard-inline-note" role="status">
-              Cargando espacios…
-            </p>
-          )}
-          {error && (
-            <p className="dashboard-inline-note" role="status">
-              No se pudieron actualizar los espacios compartidos.
-            </p>
-          )}
-        </div>
+        </LimitedCardGrid>
+        {loading && (
+          <p className="dashboard-inline-note" role="status">
+            Cargando espacios…
+          </p>
+        )}
+        {error && (
+          <p className="dashboard-inline-note" role="status">
+            No se pudieron actualizar los espacios compartidos.
+          </p>
+        )}
       </section>
 
       <section
@@ -431,14 +524,11 @@ export function HomeDashboard({
               {projects.length}{" "}
               {projects.length === 1 ? "proyecto" : "proyectos"}
             </span>
-            <Button
-              type="button"
-              className="gap-2 border border-line bg-paper text-foreground hover:bg-panel"
-              onClick={onOpenPreferences}
-            >
-              <InterfaceIcon name="filter" data-icon="inline-start" />
-              Preferencias
-            </Button>
+            <SectionPreferences
+              label="Proyectos"
+              rows={projectRows}
+              onChange={onProjectRowsChange}
+            />
             <Button type="button" className="gap-2" onClick={onAddProject}>
               <InterfaceIcon name="plus" data-icon="inline-start" />
               Añadir proyecto
@@ -446,10 +536,10 @@ export function HomeDashboard({
           </div>
         </div>
         {projects.length ? (
-          <div
-            className="dashboard-card-grid project-card-grid"
-            role="list"
-            aria-label="Proyectos de este espacio"
+          <LimitedCardGrid
+            key={`projects-${selectedSpaceId}-${projectRows}`}
+            rows={projectRows}
+            label="Proyectos de este espacio"
           >
             {projects.map((project) => (
               <div role="listitem" key={project.id}>
@@ -460,7 +550,7 @@ export function HomeDashboard({
                 />
               </div>
             ))}
-          </div>
+          </LimitedCardGrid>
         ) : (
           <div className="dashboard-empty-projects">
             <span className="dashboard-empty-icon">
@@ -485,9 +575,9 @@ export function HomeDashboard({
             <p className="dashboard-eyebrow">TU VISTA, A TU RITMO</p>
             <h2 id="personal-panel-title">Tu panel personal</h2>
           </div>
-          <details className="dashboard-customizer">
+          <Dropdown className="dashboard-customizer">
             <summary className="topbar-button gap-2 px-3">
-              <InterfaceIcon name="filter" />
+              <InterfaceIcon name="brush" />
               Personalizar
             </summary>
             <div className="dashboard-customizer-popover">
@@ -503,7 +593,7 @@ export function HomeDashboard({
                 </label>
               ))}
             </div>
-          </details>
+          </Dropdown>
         </div>
         {widgets.length ? (
           <div className="dashboard-widget-grid">

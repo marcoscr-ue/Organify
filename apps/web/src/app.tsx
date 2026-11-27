@@ -1,3 +1,5 @@
+import { Dropdown } from "@/components/ui/dropdown";
+import { Dialog } from "@/components/ui/dialog";
 import {
   useEffect,
   useId,
@@ -69,6 +71,7 @@ import {
   TaskField,
   TaskStatusIcon,
 } from "./task-controls";
+import { ProjectCreationDialog } from "./project-creation-dialog";
 import { ProjectNavigation } from "./project-navigation";
 import { InterfaceIcon } from "./interface-icon";
 import { RoutinesWorkspace } from "./routines";
@@ -343,7 +346,7 @@ function TaskDetail({
   }
 
   return (
-    <dialog
+    <Dialog
       ref={dialog}
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
       className={
@@ -655,7 +658,7 @@ function TaskDetail({
           )}
         </div>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
 
@@ -738,12 +741,9 @@ export function App() {
   );
   const [now, setNow] = useState(Date.now);
   const [input, setInput] = useState("");
-  const projectNameInput = useRef<HTMLInputElement>(null);
-  const [projectName, setProjectName] = useState("");
+  const [projectCreationOpen, setProjectCreationOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [floatingCaptureOpen, setFloatingCaptureOpen] = useState(false);
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [projectCreationFailed, setProjectCreationFailed] = useState(false);
   const [taskSearch, setTaskSearch] = useState(floatingTasks?.search ?? "");
   const [statusFilter, setStatusFilter] = useState<Status | undefined>(
     floatingTasks?.status,
@@ -893,8 +893,7 @@ export function App() {
     setTaskSearch("");
     setStatusFilter(undefined);
     setInput("");
-    setProjectName("");
-    setProjectCreationFailed(false);
+    setProjectCreationOpen(false);
     setError("");
     setNotice("");
   }
@@ -1028,17 +1027,15 @@ export function App() {
     setCapturing(false);
   }
 
-  async function createProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (creatingProject || !projectName.trim()) return;
-    setCreatingProject(true);
-    setProjectCreationFailed(false);
-    const created = await write(async () => {
-      navigate("all", await repositories.projects.create(projectName));
-    }, "Proyecto creado.");
-    if (created) setProjectName("");
-    else setProjectCreationFailed(true);
-    setCreatingProject(false);
+  function openProjectCreation() {
+    navigation.current?.close();
+    setProjectCreationOpen(true);
+  }
+
+  async function createProject(name: string, color: string) {
+    const id = await repositories.projects.create(name, color);
+    navigate("all", id);
+    setNotice("Proyecto creado.");
   }
 
   function move(id: Id, status: Status) {
@@ -1435,7 +1432,7 @@ export function App() {
                 space={space}
                 error={sharedWorkspaces.error}
                 status={space && sharedWorkspaces.statuses[space.membershipId]}
-                disabled={capturing || creatingProject}
+                disabled={capturing || projectCreationOpen}
                 onSelect={(id) => {
                   changeWorkspace(id);
                   navigation.current?.close();
@@ -1560,7 +1557,19 @@ export function App() {
             </nav>
           </div>
           <div className="grid gap-2">
-            <h2 className="sidebar-label">Proyectos</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="sidebar-label">Proyectos</h2>
+              <button
+                type="button"
+                className="nav-link grid size-9 place-items-center p-0"
+                aria-label="Crear proyecto"
+                title="Crear proyecto"
+                disabled={!snapshot}
+                onClick={openProjectCreation}
+              >
+                <InterfaceIcon name="plus" />
+              </button>
+            </div>
             <nav aria-label="Proyectos" className="grid min-w-0 gap-1">
               {projects.map((project) => (
                 <ProjectNavigation
@@ -1574,36 +1583,6 @@ export function App() {
                 />
               ))}
             </nav>
-            <form
-              className="flex min-w-0 gap-1 md:max-w-56"
-              onSubmit={createProject}
-            >
-              <input
-                className="field min-w-0 flex-1"
-                ref={projectNameInput}
-                value={projectName}
-                onChange={(event) => {
-                  setProjectName(event.target.value);
-                  setProjectCreationFailed(false);
-                }}
-                placeholder="Nuevo proyecto"
-                aria-label="Nuevo proyecto"
-                required
-              />
-              <Button
-                type="submit"
-                aria-label="Crear proyecto"
-                disabled={!snapshot || creatingProject}
-                className="max-md:size-11 max-md:shrink-0"
-              >
-                <InterfaceIcon name="plus" />
-              </Button>
-            </form>
-            {compactNavigation && projectCreationFailed && error && (
-              <p role="alert" className="px-2 text-sm text-danger">
-                {error}
-              </p>
-            )}
           </div>
         </WorkspaceSidebar>
         {!compactNavigation && sidebarCollapsed && (
@@ -1639,16 +1618,20 @@ export function App() {
               canAddWorkspace={Boolean(workspaceSession)}
               onSelectSpace={changeWorkspace}
               onSelectProject={(id) => navigate("all", id)}
-              onAddProject={() => {
-                if (compactNavigation) navigation.current?.showModal();
-                projectNameInput.current?.focus();
-              }}
+              onAddProject={openProjectCreation}
               onAddWorkspace={() =>
                 workspaceSession
                   ? workspacePicker.current?.open()
                   : settingsDialog.current?.showModal()
               }
-              onOpenPreferences={() => settingsDialog.current?.showModal()}
+              workspaceRows={viewPreferences.dashboardWorkspaceRows}
+              projectRows={viewPreferences.dashboardProjectRows}
+              onWorkspaceRowsChange={(rows) =>
+                viewPreferences.save({ dashboardWorkspaceRows: rows })
+              }
+              onProjectRowsChange={(rows) =>
+                viewPreferences.save({ dashboardProjectRows: rows })
+              }
               onOpenInbox={(id) => navigate(id)}
               onOpenAgenda={openEvents}
               onOpenCalendar={() => {
@@ -1812,7 +1795,7 @@ export function App() {
                     </span>
                   )}
                 </div>
-                <details className="relative">
+                <Dropdown className="relative">
                   <summary className="topbar-button disclosure-trigger gap-1.5 px-2.5">
                     <InterfaceIcon name="filter" />
                     Filtrar{statusFilter && ` · ${statusLabels[statusFilter]}`}
@@ -1840,7 +1823,7 @@ export function App() {
                       <option value="done">Hecha</option>
                     </select>
                   </div>
-                </details>
+                </Dropdown>
               </div>
               {quickCapture}
 
@@ -1954,7 +1937,7 @@ export function App() {
                                 onChange={(status) => move(item.id, status)}
                               />
                             </div>
-                            <details className="relative" name="task-actions">
+                            <Dropdown className="relative" name="task-actions">
                               <summary
                                 className="nav-link disclosure-trigger grid size-9 place-items-center p-0"
                                 aria-label={`Opciones de ${item.title}`}
@@ -2012,7 +1995,7 @@ export function App() {
                                   Eliminar tarea
                                 </button>
                               </div>
-                            </details>
+                            </Dropdown>
                           </li>
                         );
                       })}
@@ -2028,6 +2011,12 @@ export function App() {
         </main>
       </div>
 
+      {projectCreationOpen && (
+        <ProjectCreationDialog
+          save={createProject}
+          close={() => setProjectCreationOpen(false)}
+        />
+      )}
       {taskDetail}
       {renameDialog}
       {deleteConfirmation}
@@ -2047,7 +2036,7 @@ export function App() {
         </div>
       )}
 
-      <dialog
+      <Dialog
         ref={palette}
         aria-labelledby="commands-title"
         className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-xl border border-line bg-paper p-4 text-foreground shadow-xl backdrop:bg-black/35"
@@ -2098,7 +2087,7 @@ export function App() {
         ) : (
           <p className="text-sm text-muted">No hay comandos que coincidan.</p>
         )}
-      </dialog>
+      </Dialog>
     </div>
   );
 }
